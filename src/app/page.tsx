@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 import { supabase } from './lib/supabase'
 import RecipeForm from './components/recipe-form'
@@ -27,7 +28,7 @@ export default async function HomePage() {
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="space-y-2">
           <p className="text-sm font-medium uppercase tracking-wide text-gray-900">
-            KC Craft Ramen
+            KC CRAFT RAMEN
           </p>
           <h1 className="text-4xl font-bold tracking-tight text-gray-900">
             Recipe Manager
