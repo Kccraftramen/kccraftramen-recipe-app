@@ -118,6 +118,16 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       return
     }
 
+    await supabase.from('recipe_change_logs').insert({
+      recipe_id: recipeId,
+      entity_type: 'step',
+      action_type: 'create',
+      item_name: `Step ${parsedStepNumber}`,
+      section_name: trimmedSectionName || null,
+      before_value: null,
+      after_value: trimmedInstruction,
+    })
+
     setMessage('Step added successfully.')
     setStepNumber(String(parsedStepNumber + 1))
     setSectionName('')

@@ -31,6 +31,17 @@ type StepRow = {
   instruction: string
 }
 
+type ChangeLog = {
+  id: string
+  entity_type: string
+  action_type: string
+  item_name: string | null
+  section_name: string | null
+  before_value: string | null
+  after_value: string | null
+  changed_at: string
+}
+
 type Props = {
   recipe: {
     id: string
@@ -44,6 +55,7 @@ type Props = {
   }
   ingredientRows: IngredientRow[]
   stepRows: StepRow[]
+  changeLogs: ChangeLog[]
 }
 
 function formatNumber(value: number) {
@@ -104,10 +116,25 @@ function normalizeSectionName(value: string | null) {
   return trimmed || 'Other'
 }
 
+function formatChangedAt(value: string) {
+  try {
+    return new Date(value).toLocaleString()
+  } catch {
+    return value
+  }
+}
+
+function actionLabel(entityType: string, actionType: string) {
+  const entity = entityType.charAt(0).toUpperCase() + entityType.slice(1)
+  const action = actionType.charAt(0).toUpperCase() + actionType.slice(1)
+  return `${entity} ${action}`
+}
+
 export default function RecipeDetailClient({
   recipe,
   ingredientRows,
   stepRows,
+  changeLogs,
 }: Props) {
   const [targetServings, setTargetServings] = useState(
     String(recipe.base_servings)
@@ -275,6 +302,45 @@ export default function RecipeDetailClient({
                 </div>
               )}
             </section>
+          </div>
+
+          <div className="mt-10 space-y-4">
+            <h2 className="text-2xl font-semibold text-gray-900">Change History</h2>
+
+            {changeLogs.length ? (
+              <div className="space-y-3">
+                {changeLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {actionLabel(log.entity_type, log.action_type)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatChangedAt(log.changed_at)}
+                      </div>
+                    </div>
+
+                    <div className="mt-2 space-y-1 text-sm text-gray-700">
+                      <div>Item: {log.item_name || '-'}</div>
+                      <div>Section: {log.section_name || '-'}</div>
+                      {log.before_value ? (
+                        <div>Before: {log.before_value}</div>
+                      ) : null}
+                      {log.after_value ? (
+                        <div>After: {log.after_value}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                No change history yet.
+              </div>
+            )}
           </div>
         </div>
       </div>

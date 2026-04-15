@@ -8,6 +8,8 @@ type IngredientRow = {
   id: string
   quantity: number
   unit: string
+  section_name: string | null
+  recipe_id?: string
   ingredients:
     | {
         id: string
@@ -61,6 +63,21 @@ export default function IngredientEditRow({
     setLoading(true)
     setMessage('Saving...')
 
+    const beforeValue = `${row.quantity} ${row.unit}`
+    const afterValue = `${parsedQuantity} ${unit}`
+
+    const { data: recipeIngredientRow, error: readError } = await supabase
+      .from('recipe_ingredients')
+      .select('recipe_id, section_name')
+      .eq('id', row.id)
+      .single()
+
+    if (readError) {
+      setMessage(`Error: ${readError.message}`)
+      setLoading(false)
+      return
+    }
+
     const { error } = await supabase
       .from('recipe_ingredients')
       .update({
@@ -74,6 +91,16 @@ export default function IngredientEditRow({
       setLoading(false)
       return
     }
+
+    await supabase.from('recipe_change_logs').insert({
+      recipe_id: recipeIngredientRow.recipe_id,
+      entity_type: 'ingredient',
+      action_type: 'update',
+      item_name: ingredient?.name || 'Ingredient',
+      section_name: recipeIngredientRow.section_name,
+      before_value: beforeValue,
+      after_value: afterValue,
+    })
 
     setMessage('')
     setLoading(false)
@@ -89,7 +116,7 @@ export default function IngredientEditRow({
   }
 
   return (
-    <div className="border rounded-lg p-3 flex items-start justify-between gap-3">
+    <div className="border rounded-lg p-3 flex items-start justify-between gap-3 bg-white">
       <div className="flex-1">
         <div className="font-medium">{ingredient?.name}</div>
 
@@ -102,9 +129,7 @@ export default function IngredientEditRow({
             <div className="text-sm font-medium">
               Scaled: {formatNumber(converted.value)} {converted.unit}
               {usUnit && (
-                <span className="text-gray-500 ml-2">
-                  ({usUnit})
-                </span>
+                <span className="text-gray-500 ml-2">({usUnit})</span>
               )}
             </div>
           </>
@@ -135,6 +160,7 @@ export default function IngredientEditRow({
                 <option value="L">L</option>
                 <option value="lb">lb</option>
                 <option value="gal">gal</option>
+                <option value="pcs">pcs</option>
               </select>
             </div>
 

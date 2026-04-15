@@ -7,6 +7,7 @@ import StepDeleteButton from './step-delete-button'
 type StepRow = {
   id: string
   step_number: number
+  section_name: string | null
   instruction: string
 }
 
@@ -38,6 +39,18 @@ export default function StepEditRow({ step }: Props) {
     setLoading(true)
     setMessage('Saving...')
 
+    const { data: currentRow, error: readError } = await supabase
+      .from('recipe_steps')
+      .select('recipe_id, section_name, step_number, instruction')
+      .eq('id', step.id)
+      .single()
+
+    if (readError) {
+      setMessage(`Error: ${readError.message}`)
+      setLoading(false)
+      return
+    }
+
     const { error } = await supabase
       .from('recipe_steps')
       .update({
@@ -51,6 +64,16 @@ export default function StepEditRow({ step }: Props) {
       setLoading(false)
       return
     }
+
+    await supabase.from('recipe_change_logs').insert({
+      recipe_id: currentRow.recipe_id,
+      entity_type: 'step',
+      action_type: 'update',
+      item_name: `Step ${currentRow.step_number}`,
+      section_name: currentRow.section_name,
+      before_value: currentRow.instruction,
+      after_value: trimmedInstruction,
+    })
 
     setMessage('')
     setLoading(false)
@@ -66,7 +89,7 @@ export default function StepEditRow({ step }: Props) {
   }
 
   return (
-    <div className="border rounded-lg p-3 flex items-start justify-between gap-3">
+    <div className="border rounded-lg p-3 flex items-start justify-between gap-3 bg-white">
       <div className="flex-1">
         {!isEditing ? (
           <>

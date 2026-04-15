@@ -38,6 +38,12 @@ export default async function RecipeDetailPage({ params }: PageProps) {
     .eq('recipe_id', id)
     .order('step_number', { ascending: true })
 
+  const { data: changeLogs, error: changeLogError } = await supabase
+    .from('recipe_change_logs')
+    .select('*')
+    .eq('recipe_id', id)
+    .order('changed_at', { ascending: false })
+
   if (recipeError) {
     return <main className="p-6">Error: {recipeError.message}</main>
   }
@@ -50,11 +56,16 @@ export default async function RecipeDetailPage({ params }: PageProps) {
     return <main className="p-6">Error: {stepError.message}</main>
   }
 
+  if (changeLogError) {
+    return <main className="p-6">Error: {changeLogError.message}</main>
+  }
+
   return (
     <RecipeDetailClient
       recipe={recipe}
       ingredientRows={ingredientRows || []}
       stepRows={stepRows || []}
+      changeLogs={changeLogs || []}
     />
   )
 }
