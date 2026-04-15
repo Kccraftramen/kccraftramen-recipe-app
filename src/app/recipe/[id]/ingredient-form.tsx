@@ -17,6 +17,7 @@ export default function IngredientForm({ recipeId }: Props) {
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState('')
   const [unit, setUnit] = useState('g')
+  const [sectionName, setSectionName] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -90,6 +91,7 @@ export default function IngredientForm({ recipeId }: Props) {
 
     const trimmedName = name.trim()
     const parsedQuantity = Number(quantity)
+    const trimmedSectionName = sectionName.trim()
 
     if (!trimmedName) {
       setMessage('Ingredient name is required.')
@@ -146,6 +148,7 @@ export default function IngredientForm({ recipeId }: Props) {
           ingredient_id: ingredientId,
           quantity: parsedQuantity,
           unit,
+          section_name: trimmedSectionName || null,
         })
 
       if (recipeIngredientError) {
@@ -158,6 +161,7 @@ export default function IngredientForm({ recipeId }: Props) {
       setName('')
       setQuantity('')
       setUnit('g')
+      setSectionName('')
       setSuggestions([])
       setShowSuggestions(false)
 
@@ -176,6 +180,18 @@ export default function IngredientForm({ recipeId }: Props) {
         <p className="text-sm text-gray-500">
           Add a new ingredient to this recipe.
         </p>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Section Name
+        </label>
+        <input
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+          value={sectionName}
+          onChange={(e) => setSectionName(e.target.value)}
+          placeholder="e.g. Egg Mixture / Filling / Topping"
+        />
       </div>
 
       <div ref={wrapperRef} className="relative">

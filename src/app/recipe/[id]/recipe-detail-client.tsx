@@ -10,6 +10,7 @@ type IngredientRow = {
   id: string
   quantity: number
   unit: string
+  section_name: string | null
   ingredients:
     | {
         id: string
@@ -26,6 +27,7 @@ type IngredientRow = {
 type StepRow = {
   id: string
   step_number: number
+  section_name: string | null
   instruction: string
 }
 
@@ -185,14 +187,21 @@ export default function RecipeDetailClient({
               {ingredientRows?.length ? (
                 <div className="space-y-3">
                   {ingredientRows.map((row) => (
-                    <IngredientEditRow
-                      key={row.id}
-                      row={row}
-                      multiplier={multiplier}
-                      formatNumber={formatNumber}
-                      convertUnit={convertUnit}
-                      getUSUnit={getUSUnit}
-                    />
+                    <div key={row.id} className="space-y-1">
+                      {row.section_name ? (
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          {row.section_name}
+                        </div>
+                      ) : null}
+
+                      <IngredientEditRow
+                        row={row}
+                        multiplier={multiplier}
+                        formatNumber={formatNumber}
+                        convertUnit={convertUnit}
+                        getUSUnit={getUSUnit}
+                      />
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -208,7 +217,15 @@ export default function RecipeDetailClient({
               {stepRows?.length ? (
                 <div className="space-y-3">
                   {stepRows.map((step) => (
-                    <StepEditRow key={step.id} step={step} />
+                    <div key={step.id} className="space-y-1">
+                      {step.section_name ? (
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          {step.section_name}
+                        </div>
+                      ) : null}
+
+                      <StepEditRow step={step} />
+                    </div>
                   ))}
                 </div>
               ) : (

@@ -10,6 +10,7 @@ type Props = {
 
 export default function StepForm({ recipeId, nextStepNumber }: Props) {
   const [stepNumber, setStepNumber] = useState(String(nextStepNumber))
+  const [sectionName, setSectionName] = useState('')
   const [instruction, setInstruction] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,6 +20,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
     const parsedStepNumber = Number(stepNumber)
     const trimmedInstruction = instruction.trim()
+    const trimmedSectionName = sectionName.trim()
 
     if (!parsedStepNumber || parsedStepNumber <= 0) {
       setMessage('Step number must be greater than 0.')
@@ -38,6 +40,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       .insert({
         recipe_id: recipeId,
         step_number: parsedStepNumber,
+        section_name: trimmedSectionName || null,
         instruction: trimmedInstruction,
       })
 
@@ -49,6 +52,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
     setMessage('Step added successfully.')
     setStepNumber(String(parsedStepNumber + 1))
+    setSectionName('')
     setInstruction('')
     setLoading(false)
     window.location.reload()
@@ -61,6 +65,18 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
         <p className="text-sm text-gray-500">
           Add the next instruction for this recipe.
         </p>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Section Name
+        </label>
+        <input
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+          value={sectionName}
+          onChange={(e) => setSectionName(e.target.value)}
+          placeholder="e.g. Egg Mixture / Cutting / Steaming"
+        />
       </div>
 
       <div>
