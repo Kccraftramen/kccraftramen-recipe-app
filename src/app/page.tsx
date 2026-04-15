@@ -27,13 +27,13 @@ export default async function HomePage() {
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="space-y-2">
-          <p className="text-sm font-medium uppercase tracking-wide text-gray-900">
+          <p className="text-sm font-medium uppercase tracking-wide text-white">
             KC CRAFT RAMEN
           </p>
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+          <h1 className="text-4xl font-bold tracking-tight text-white">
             Recipe Manager
           </h1>
-          <p className="max-w-2xl text-sm text-gray-900">
+          <p className="max-w-2xl text-sm text-white">
             Manage recipes, ingredients, steps, scaling, and event-specific menu items in one place.
           </p>
         </header>
