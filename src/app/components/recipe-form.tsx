@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 
 export default function RecipeForm() {
   const [name, setName] = useState('')
+  const [author, setAuthor] = useState('')
   const [category, setCategory] = useState('')
   const [baseServings, setBaseServings] = useState('1')
   const [notes, setNotes] = useState('')
@@ -18,6 +19,7 @@ export default function RecipeForm() {
 
     const { error } = await supabase.from('recipes').insert({
       name,
+      author: author.trim() || null,
       category,
       base_servings: Number(baseServings),
       notes,
@@ -32,6 +34,7 @@ export default function RecipeForm() {
 
     setMessage('Saved successfully.')
     setName('')
+    setAuthor('')
     setCategory('')
     setBaseServings('1')
     setNotes('')
@@ -65,6 +68,18 @@ export default function RecipeForm() {
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">
+            Author
+          </label>
+          <input
+            className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+            value={author}
+            onChange={(e) => setAuthor(e.target.value)}
+            placeholder="e.g. Rika / Kitchen Team"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">
             Category
           </label>
           <input
@@ -93,15 +108,15 @@ export default function RecipeForm() {
             Usage Type
           </label>
           <select
-            className="w-full h-[42px] rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+            className="w-full h-[42px] rounded-xl border border-gray-300 px-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
             value={usageType}
             onChange={(e) => setUsageType(e.target.value)}
           >
             <option value="regular">Regular Menu</option>
             <option value="event">Event</option>
+            <option value="obento">Obento</option>
             <option value="seasonal">Seasonal</option>
             <option value="prep">Prep Only</option>
-            <option value="obento">Obento</option>
           </select>
         </div>
 
@@ -139,11 +154,7 @@ export default function RecipeForm() {
           Save Recipe
         </button>
 
-        {message && (
-          <p className="text-sm text-gray-500">
-            {message}
-          </p>
-        )}
+        {message && <p className="text-sm text-gray-500">{message}</p>}
       </div>
     </form>
   )

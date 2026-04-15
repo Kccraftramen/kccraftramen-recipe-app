@@ -35,6 +35,7 @@ type Props = {
   recipe: {
     id: string
     name: string
+    author: string | null
     category: string | null
     base_servings: number
     notes: string | null
@@ -135,6 +136,7 @@ export default function RecipeDetailClient({
             </h1>
 
             <div className="grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
+              <div>Author: {recipe.author || '-'}</div>
               <div>Category: {recipe.category || '-'}</div>
               <div>Usage Type: {usageTypeLabel(recipe.usage_type)}</div>
               <div>Event Name: {recipe.event_name || '-'}</div>
