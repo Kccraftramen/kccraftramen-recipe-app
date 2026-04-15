@@ -18,25 +18,25 @@ export default async function RecipeDetailPage({ params }: PageProps) {
     .single()
 
   const { data: ingredientRows, error: ingredientError } = await supabase
-  .from('recipe_ingredients')
-  .select(`
-    id,
-    quantity,
-    unit,
-    section_name,
-    ingredients (
+    .from('recipe_ingredients')
+    .select(`
       id,
-      name,
-      default_unit
-    )
-  `)
-  .eq('recipe_id', id)
+      quantity,
+      unit,
+      section_name,
+      ingredients (
+        id,
+        name,
+        default_unit
+      )
+    `)
+    .eq('recipe_id', id)
 
   const { data: stepRows, error: stepError } = await supabase
-  .from('recipe_steps')
-  .select('*')
-  .eq('recipe_id', id)
-  .order('step_number', { ascending: true })
+    .from('recipe_steps')
+    .select('*')
+    .eq('recipe_id', id)
+    .order('step_number', { ascending: true })
 
   if (recipeError) {
     return <main className="p-6">Error: {recipeError.message}</main>

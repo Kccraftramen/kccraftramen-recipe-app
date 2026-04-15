@@ -99,6 +99,11 @@ function usageTypeLabel(value: string | null) {
   }
 }
 
+function normalizeSectionName(value: string | null) {
+  const trimmed = value?.trim()
+  return trimmed || 'Other'
+}
+
 export default function RecipeDetailClient({
   recipe,
   ingredientRows,
@@ -118,6 +123,39 @@ export default function RecipeDetailClient({
     stepRows.length > 0
       ? Math.max(...stepRows.map((step) => step.step_number)) + 1
       : 1
+
+  const groupedIngredients = useMemo(() => {
+    const groups = new Map<string, IngredientRow[]>()
+
+    ingredientRows.forEach((row) => {
+      const section = normalizeSectionName(row.section_name)
+      const existing = groups.get(section) || []
+      existing.push(row)
+      groups.set(section, existing)
+    })
+
+    return Array.from(groups.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )
+  }, [ingredientRows])
+
+  const groupedSteps = useMemo(() => {
+    const groups = new Map<string, StepRow[]>()
+
+    stepRows.forEach((row) => {
+      const section = normalizeSectionName(row.section_name)
+      const existing = groups.get(section) || []
+      existing.push(row)
+      groups.set(section, existing)
+    })
+
+    return Array.from(groups.entries())
+      .map(([section, rows]) => [
+        section,
+        rows.sort((a, b) => a.step_number - b.step_number),
+      ] as const)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+  }, [stepRows])
 
   return (
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
@@ -183,29 +221,30 @@ export default function RecipeDetailClient({
           </div>
 
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <section className="space-y-3">
+            <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-gray-900">Ingredients</h2>
 
-              {ingredientRows?.length ? (
-                <div className="space-y-3">
-                  {ingredientRows.map((row) => (
-                    <div key={row.id} className="space-y-1">
-                      {row.section_name ? (
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          {row.section_name}
-                        </div>
-                      ) : null}
-
-                      <IngredientEditRow
-                        row={row}
-                        multiplier={multiplier}
-                        formatNumber={formatNumber}
-                        convertUnit={convertUnit}
-                        getUSUnit={getUSUnit}
-                      />
+              {groupedIngredients.length ? (
+                groupedIngredients.map(([section, rows]) => (
+                  <div key={section} className="space-y-3">
+                    <div className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700">
+                      {section}
                     </div>
-                  ))}
-                </div>
+
+                    <div className="space-y-3">
+                      {rows.map((row) => (
+                        <IngredientEditRow
+                          key={row.id}
+                          row={row}
+                          multiplier={multiplier}
+                          formatNumber={formatNumber}
+                          convertUnit={convertUnit}
+                          getUSUnit={getUSUnit}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
                   No ingredients yet.
@@ -213,23 +252,23 @@ export default function RecipeDetailClient({
               )}
             </section>
 
-            <section className="space-y-3">
+            <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-gray-900">Steps</h2>
 
-              {stepRows?.length ? (
-                <div className="space-y-3">
-                  {stepRows.map((step) => (
-                    <div key={step.id} className="space-y-1">
-                      {step.section_name ? (
-                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          {step.section_name}
-                        </div>
-                      ) : null}
-
-                      <StepEditRow step={step} />
+              {groupedSteps.length ? (
+                groupedSteps.map(([section, rows]) => (
+                  <div key={section} className="space-y-3">
+                    <div className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700">
+                      {section}
                     </div>
-                  ))}
-                </div>
+
+                    <div className="space-y-3">
+                      {rows.map((step) => (
+                        <StepEditRow key={step.id} step={step} />
+                      ))}
+                    </div>
+                  </div>
+                ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
                   No steps yet.
