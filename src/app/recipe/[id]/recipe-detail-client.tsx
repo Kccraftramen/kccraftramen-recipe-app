@@ -79,6 +79,23 @@ function getUSUnit(value: number, unit: string) {
   return null
 }
 
+function usageTypeLabel(value: string | null) {
+  switch (value) {
+    case 'regular':
+      return 'Regular Menu'
+    case 'event':
+      return 'Event'
+    case 'obento':
+      return 'Obento'
+    case 'seasonal':
+      return 'Seasonal'
+    case 'prep':
+      return 'Prep Only'
+    default:
+      return value || '-'
+  }
+}
+
 export default function RecipeDetailClient({
   recipe,
   ingredientRows,
@@ -100,87 +117,106 @@ export default function RecipeDetailClient({
       : 1
 
   return (
-    <main className="p-6 max-w-2xl">
-      <a href="/" className="underline">
-        ← Back to list
-      </a>
+    <main className="min-h-screen bg-[#E60012] px-6 py-10">
+      <div className="mx-auto max-w-5xl">
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
+          <a href="/" className="inline-flex text-sm font-medium text-gray-700 underline">
+            ← Back to list
+          </a>
 
-      <h1 className="text-2xl font-bold mt-4 mb-2">{recipe.name}</h1>
+          <div className="mt-4 space-y-2">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+              {recipe.name}
+            </h1>
 
-      <div className="text-sm text-gray-600 mb-1">
-        Category: {recipe.category || '-'}
-      </div>
-      <div className="text-sm text-gray-600 mb-1">
-        Usage Type: {recipe.usage_type || '-'}
-      </div>
-      <div className="text-sm text-gray-600 mb-1">
-        Event Name: {recipe.event_name || '-'}
-      </div>
-      <div className="text-sm text-gray-600 mb-1">
-        Base Servings: {recipe.base_servings}
-      </div>
-      <div className="text-sm text-gray-600 mb-4">
-        Notes: {recipe.notes || '-'}
-      </div>
+            <div className="grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
+              <div>Category: {recipe.category || '-'}</div>
+              <div>Usage Type: {usageTypeLabel(recipe.usage_type)}</div>
+              <div>Event Name: {recipe.event_name || '-'}</div>
+              <div>Base Servings: {recipe.base_servings}</div>
+            </div>
 
-      <section className="border rounded-lg p-4 mb-6 space-y-3">
-        <h2 className="text-lg font-semibold">Scaling</h2>
-
-        <div>
-          <label className="block text-sm mb-1">Target Servings</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            className="border rounded px-3 py-2 w-full"
-            value={targetServings}
-            onChange={(e) => setTargetServings(e.target.value)}
-          />
-        </div>
-
-        <div className="text-sm text-gray-600">
-          Multiplier: {formatNumber(multiplier)}x
-        </div>
-      </section>
-
-      <IngredientForm recipeId={recipe.id} />
-
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-3">Ingredients</h2>
-
-        {ingredientRows?.length ? (
-          <div className="space-y-2">
-            {ingredientRows.map((row) => (
-              <IngredientEditRow
-                key={row.id}
-                row={row}
-                multiplier={multiplier}
-                formatNumber={formatNumber}
-                convertUnit={convertUnit}
-                getUSUnit={getUSUnit}
-              />
-            ))}
+            <div className="text-sm text-gray-600">
+              Notes: {recipe.notes || '-'}
+            </div>
           </div>
-        ) : (
-          <div>No ingredients yet.</div>
-        )}
-      </section>
 
-      <StepForm recipeId={recipe.id} nextStepNumber={nextStepNumber} />
+          <div className="mt-8 space-y-8">
+            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-4">
+              <h2 className="text-2xl font-semibold text-gray-900">Scaling</h2>
 
-      <section>
-        <h2 className="text-xl font-semibold mb-3">Steps</h2>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Target Servings
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+                  value={targetServings}
+                  onChange={(e) => setTargetServings(e.target.value)}
+                />
+              </div>
 
-        {stepRows?.length ? (
-          <div className="space-y-2">
-            {stepRows.map((step) => (
-              <StepEditRow key={step.id} step={step} />
-            ))}
+              <div className="text-sm text-gray-600">
+                Multiplier: {formatNumber(multiplier)}x
+              </div>
+            </section>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-0">
+              <div className="p-0">
+                <IngredientForm recipeId={recipe.id} />
+              </div>
+            </div>
+
+            <section className="space-y-3">
+              <h2 className="text-2xl font-semibold text-gray-900">Ingredients</h2>
+
+              {ingredientRows?.length ? (
+                <div className="space-y-3">
+                  {ingredientRows.map((row) => (
+                    <IngredientEditRow
+                      key={row.id}
+                      row={row}
+                      multiplier={multiplier}
+                      formatNumber={formatNumber}
+                      convertUnit={convertUnit}
+                      getUSUnit={getUSUnit}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                  No ingredients yet.
+                </div>
+              )}
+            </section>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-0">
+              <div className="p-0">
+                <StepForm recipeId={recipe.id} nextStepNumber={nextStepNumber} />
+              </div>
+            </div>
+
+            <section className="space-y-3">
+              <h2 className="text-2xl font-semibold text-gray-900">Steps</h2>
+
+              {stepRows?.length ? (
+                <div className="space-y-3">
+                  {stepRows.map((step) => (
+                    <StepEditRow key={step.id} step={step} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                  No steps yet.
+                </div>
+              )}
+            </section>
           </div>
-        ) : (
-          <div>No steps yet.</div>
-        )}
-      </section>
+        </div>
+      </div>
     </main>
   )
 }
