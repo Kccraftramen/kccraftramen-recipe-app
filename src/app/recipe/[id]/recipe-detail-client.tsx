@@ -118,13 +118,16 @@ export default function RecipeDetailClient({
 
   return (
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
-      <div className="mx-auto max-w-5xl">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
-          <a href="/" className="inline-flex text-sm font-medium text-gray-700 underline">
+      <div className="mx-auto max-w-6xl">
+        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-lg md:p-8">
+          <a
+            href="/"
+            className="inline-flex text-sm font-medium text-gray-700 underline"
+          >
             ← Back to list
           </a>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-5 space-y-3">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900">
               {recipe.name}
             </h1>
@@ -141,9 +144,9 @@ export default function RecipeDetailClient({
             </div>
           </div>
 
-          <div className="mt-8 space-y-8">
+          <div className="mt-8 grid gap-6 xl:grid-cols-3">
             <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-4">
-              <h2 className="text-2xl font-semibold text-gray-900">Scaling</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Scaling</h2>
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -164,12 +167,18 @@ export default function RecipeDetailClient({
               </div>
             </section>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-0">
-              <div className="p-0">
+            <div className="xl:col-span-2 grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                 <IngredientForm recipeId={recipe.id} />
               </div>
-            </div>
 
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <StepForm recipeId={recipe.id} nextStepNumber={nextStepNumber} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-8 lg:grid-cols-2">
             <section className="space-y-3">
               <h2 className="text-2xl font-semibold text-gray-900">Ingredients</h2>
 
@@ -192,12 +201,6 @@ export default function RecipeDetailClient({
                 </div>
               )}
             </section>
-
-            <div className="rounded-2xl border border-gray-200 bg-white p-0">
-              <div className="p-0">
-                <StepForm recipeId={recipe.id} nextStepNumber={nextStepNumber} />
-              </div>
-            </div>
 
             <section className="space-y-3">
               <h2 className="text-2xl font-semibold text-gray-900">Steps</h2>

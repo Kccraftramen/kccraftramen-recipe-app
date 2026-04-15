@@ -34,7 +34,6 @@ export default function IngredientForm({ recipeId }: Props) {
     setMessage('Saving...')
 
     try {
-      // 1) 既存の材料を探す
       const { data: existingIngredient, error: findError } = await supabase
         .from('ingredients')
         .select('id, name')
@@ -49,16 +48,16 @@ export default function IngredientForm({ recipeId }: Props) {
 
       let ingredientId = existingIngredient?.id
 
-      // 2) なければ新規作成
       if (!ingredientId) {
-        const { data: newIngredient, error: insertIngredientError } = await supabase
-          .from('ingredients')
-          .insert({
-            name: trimmedName,
-            default_unit: unit,
-          })
-          .select('id')
-          .single()
+        const { data: newIngredient, error: insertIngredientError } =
+          await supabase
+            .from('ingredients')
+            .insert({
+              name: trimmedName,
+              default_unit: unit,
+            })
+            .select('id')
+            .single()
 
         if (insertIngredientError) {
           setMessage(`Error: ${insertIngredientError.message}`)
@@ -69,7 +68,6 @@ export default function IngredientForm({ recipeId }: Props) {
         ingredientId = newIngredient.id
       }
 
-      // 3) recipe_ingredients に追加
       const { error: recipeIngredientError } = await supabase
         .from('recipe_ingredients')
         .insert({
@@ -89,9 +87,8 @@ export default function IngredientForm({ recipeId }: Props) {
       setName('')
       setQuantity('')
       setUnit('g')
-
       window.location.reload()
-    } catch (error) {
+    } catch {
       setMessage('Unexpected error occurred.')
     } finally {
       setLoading(false)
@@ -99,13 +96,20 @@ export default function IngredientForm({ recipeId }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border rounded-lg p-4 mb-6 space-y-3">
-      <h2 className="text-lg font-semibold">Add Ingredient</h2>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold text-gray-900">Add Ingredient</h2>
+        <p className="text-sm text-gray-500">
+          Add a new ingredient to this recipe.
+        </p>
+      </div>
 
       <div>
-        <label className="block text-sm mb-1">Ingredient Name</label>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Ingredient Name
+        </label>
         <input
-          className="border rounded px-3 py-2 w-full"
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Salt"
@@ -114,12 +118,14 @@ export default function IngredientForm({ recipeId }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Quantity</label>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Quantity
+        </label>
         <input
           type="number"
           step="0.01"
           min="0"
-          className="border rounded px-3 py-2 w-full"
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           placeholder="e.g. 10"
@@ -128,9 +134,11 @@ export default function IngredientForm({ recipeId }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Unit</label>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Unit
+        </label>
         <select
-          className="border rounded px-3 py-2 w-full"
+          className="w-full h-[42px] rounded-xl border border-gray-300 px-3 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={unit}
           onChange={(e) => setUnit(e.target.value)}
         >
@@ -143,15 +151,17 @@ export default function IngredientForm({ recipeId }: Props) {
         </select>
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-black text-white px-4 py-2 rounded"
-      >
-        {loading ? 'Saving...' : 'Add Ingredient'}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+        >
+          {loading ? 'Saving...' : 'Add Ingredient'}
+        </button>
 
-      {message && <div className="text-sm">{message}</div>}
+        {message && <div className="text-sm text-gray-500">{message}</div>}
+      </div>
     </form>
   )
 }

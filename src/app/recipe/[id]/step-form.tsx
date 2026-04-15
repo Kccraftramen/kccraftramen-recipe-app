@@ -55,15 +55,22 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border rounded-lg p-4 mb-6 space-y-3">
-      <h2 className="text-lg font-semibold">Add Step</h2>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold text-gray-900">Add Step</h2>
+        <p className="text-sm text-gray-500">
+          Add the next instruction for this recipe.
+        </p>
+      </div>
 
       <div>
-        <label className="block text-sm mb-1">Step Number</label>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Step Number
+        </label>
         <input
           type="number"
           min="1"
-          className="border rounded px-3 py-2 w-full"
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={stepNumber}
           onChange={(e) => setStepNumber(e.target.value)}
           required
@@ -71,9 +78,12 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       </div>
 
       <div>
-        <label className="block text-sm mb-1">Instruction</label>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Instruction
+        </label>
         <textarea
-          className="border rounded px-3 py-2 w-full"
+          rows={5}
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           placeholder="e.g. Mix soy sauce and water."
@@ -81,15 +91,17 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-black text-white px-4 py-2 rounded"
-      >
-        {loading ? 'Saving...' : 'Add Step'}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={loading}
+          className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+        >
+          {loading ? 'Saving...' : 'Add Step'}
+        </button>
 
-      {message && <div className="text-sm">{message}</div>}
+        {message && <div className="text-sm text-gray-500">{message}</div>}
+      </div>
     </form>
   )
 }
