@@ -148,6 +148,7 @@ export default function IngredientForm({ recipeId }: Props) {
           <option value="L">L</option>
           <option value="lb">lb</option>
           <option value="gal">gal</option>
+          <option value="pcs">pcs</option>
         </select>
       </div>
 
