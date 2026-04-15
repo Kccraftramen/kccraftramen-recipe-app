@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
 type Props = {
   recipeId: string
+}
+
+type IngredientSuggestion = {
+  id: string
+  name: string
+  default_unit: string | null
 }
 
 export default function IngredientForm({ recipeId }: Props) {
@@ -13,6 +19,71 @@ export default function IngredientForm({ recipeId }: Props) {
   const [unit, setUnit] = useState('g')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const [suggestions, setSuggestions] = useState<IngredientSuggestion[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const searchIngredients = async (keyword: string) => {
+    const trimmedKeyword = keyword.trim()
+
+    if (trimmedKeyword.length < 1) {
+      setSuggestions([])
+      return
+    }
+
+    setIsSearching(true)
+
+    const { data, error } = await supabase
+      .from('ingredients')
+      .select('id, name, default_unit')
+      .ilike('name', `%${trimmedKeyword}%`)
+      .order('name', { ascending: true })
+      .limit(5)
+
+    if (error) {
+      setSuggestions([])
+      setIsSearching(false)
+      return
+    }
+
+    setSuggestions(data || [])
+    setIsSearching(false)
+  }
+
+  const handleNameChange = async (value: string) => {
+    setName(value)
+    setShowSuggestions(true)
+    await searchIngredients(value)
+  }
+
+  const handleSelectSuggestion = (ingredient: IngredientSuggestion) => {
+    setName(ingredient.name)
+    if (ingredient.default_unit) {
+      setUnit(ingredient.default_unit)
+    }
+    setSuggestions([])
+    setShowSuggestions(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,6 +158,9 @@ export default function IngredientForm({ recipeId }: Props) {
       setName('')
       setQuantity('')
       setUnit('g')
+      setSuggestions([])
+      setShowSuggestions(false)
+
       window.location.reload()
     } catch {
       setMessage('Unexpected error occurred.')
@@ -104,17 +178,54 @@ export default function IngredientForm({ recipeId }: Props) {
         </p>
       </div>
 
-      <div>
+      <div ref={wrapperRef} className="relative">
         <label className="mb-1.5 block text-sm font-medium text-gray-700">
           Ingredient Name
         </label>
         <input
           className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => handleNameChange(e.target.value)}
+          onFocus={() => {
+            if (suggestions.length > 0) {
+              setShowSuggestions(true)
+            }
+          }}
           placeholder="e.g. Salt"
           required
         />
+
+        {showSuggestions && name.trim().length > 0 && (
+          <div className="absolute z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+            {isSearching ? (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                Searching...
+              </div>
+            ) : suggestions.length > 0 ? (
+              <div className="max-h-64 overflow-y-auto py-1">
+                {suggestions.map((ingredient) => (
+                  <button
+                    key={ingredient.id}
+                    type="button"
+                    onClick={() => handleSelectSuggestion(ingredient)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
+                  >
+                    <span className="font-medium text-gray-800">
+                      {ingredient.name}
+                    </span>
+                    <span className="text-gray-500">
+                      {ingredient.default_unit || '-'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                No matching ingredients. You can add this as a new one.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
