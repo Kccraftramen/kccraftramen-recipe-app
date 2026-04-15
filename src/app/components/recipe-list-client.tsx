@@ -6,6 +6,7 @@ import Link from 'next/link'
 type Recipe = {
   id: string
   name: string
+  author: string | null
   category: string | null
   base_servings: number
   notes: string | null
@@ -23,12 +24,12 @@ function usageTypeLabel(value: string | null) {
       return 'Regular Menu'
     case 'event':
       return 'Event'
+    case 'obento':
+      return 'Obento'
     case 'seasonal':
       return 'Seasonal'
     case 'prep':
       return 'Prep Only'
-    case 'obento':
-      return 'Obento'
     default:
       return value || '-'
   }
@@ -165,9 +166,7 @@ export default function RecipeListClient({ recipes }: Props) {
       </section>
 
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gray-700">
-          Results
-        </h3>
+        <h3 className="text-sm font-medium text-gray-700">Results</h3>
         <p className="text-sm text-gray-500">
           {filteredRecipes.length} recipe{filteredRecipes.length === 1 ? '' : 's'}
         </p>
@@ -194,6 +193,11 @@ export default function RecipeListClient({ recipes }: Props) {
                       {recipe.event_name ? (
                         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
                           {recipe.event_name}
+                        </span>
+                      ) : null}
+                      {recipe.author ? (
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                          By {recipe.author}
                         </span>
                       ) : null}
                     </div>
