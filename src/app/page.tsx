@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { supabase } from './lib/supabase'
 import RecipeForm from './components/recipe-form'
 import RecipeListClient from './components/recipe-list-client'
