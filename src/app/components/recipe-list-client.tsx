@@ -27,8 +27,8 @@ function usageTypeLabel(value: string | null) {
       return 'Seasonal'
     case 'prep':
       return 'Prep Only'
-    case 'test':
-      return 'Test'
+    case 'obento':
+      return 'Obento'
     default:
       return value || '-'
   }

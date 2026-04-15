@@ -101,7 +101,7 @@ export default function RecipeForm() {
             <option value="event">Event</option>
             <option value="seasonal">Seasonal</option>
             <option value="prep">Prep Only</option>
-            <option value="test">Test</option>
+            <option value="obento">Obento</option>
           </select>
         </div>
 
