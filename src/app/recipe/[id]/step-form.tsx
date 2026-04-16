@@ -23,9 +23,14 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
   const [sectionSuggestions, setSectionSuggestions] = useState<string[]>([])
   const [showSectionSuggestions, setShowSectionSuggestions] = useState(false)
+
+  const [orderNameSuggestions, setOrderNameSuggestions] = useState<string[]>([])
+  const [showOrderNameSuggestions, setShowOrderNameSuggestions] = useState(false)
+
   const [existingSections, setExistingSections] = useState<ExistingSection[]>([])
 
   const sectionWrapperRef = useRef<HTMLDivElement | null>(null)
+  const orderWrapperRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -34,6 +39,13 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
         !sectionWrapperRef.current.contains(event.target as Node)
       ) {
         setShowSectionSuggestions(false)
+      }
+
+      if (
+        orderWrapperRef.current &&
+        !orderWrapperRef.current.contains(event.target as Node)
+      ) {
+        setShowOrderNameSuggestions(false)
       }
     }
 
@@ -88,17 +100,39 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
   }
 
   const findExistingSectionOrder = (name: string) => {
-    const match = existingSections.find(
+    const matches = existingSections.filter(
       (row) =>
         row.section_name?.trim().toLowerCase() === name.trim().toLowerCase() &&
         row.section_order !== null
     )
 
-    if (match?.section_order !== null && match?.section_order !== undefined) {
-      return String(match.section_order)
+    const uniqueOrders = Array.from(
+      new Set(matches.map((row) => row.section_order))
+    ).filter((value): value is number => value !== null && value !== undefined)
+
+    if (uniqueOrders.length === 1) {
+      return String(uniqueOrders[0])
     }
 
     return ''
+  }
+
+  const findSectionNamesByOrder = (orderValue: string) => {
+    const parsedOrder = Number(orderValue)
+
+    if (!parsedOrder || parsedOrder <= 0) return []
+
+    const names = Array.from(
+      new Set(
+        existingSections
+          .filter((row) => row.section_order === parsedOrder)
+          .map((row) => row.section_name)
+          .filter((value): value is string => Boolean(value?.trim()))
+          .map((value) => value.trim())
+      )
+    ).sort((a, b) => a.localeCompare(b))
+
+    return names
   }
 
   const handleSectionChange = async (value: string) => {
@@ -113,6 +147,8 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     const matchedOrder = findExistingSectionOrder(value)
     if (matchedOrder) {
       setSectionOrder(matchedOrder)
+      setOrderNameSuggestions([])
+      setShowOrderNameSuggestions(false)
     }
 
     await fetchSectionSuggestions(value)
@@ -126,7 +162,37 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     const matchedOrder = findExistingSectionOrder(suggestion)
     if (matchedOrder) {
       setSectionOrder(matchedOrder)
+      setOrderNameSuggestions([])
+      setShowOrderNameSuggestions(false)
     }
+  }
+
+  const handleSectionOrderChange = (value: string) => {
+    setSectionOrder(value)
+
+    if (!value.trim()) {
+      setOrderNameSuggestions([])
+      setShowOrderNameSuggestions(false)
+      return
+    }
+
+    const matchedNames = findSectionNamesByOrder(value)
+
+    if (matchedNames.length === 1) {
+      setSectionName(matchedNames[0])
+      setOrderNameSuggestions([])
+      setShowOrderNameSuggestions(false)
+      return
+    }
+
+    if (matchedNames.length > 1) {
+      setOrderNameSuggestions(matchedNames)
+      setShowOrderNameSuggestions(true)
+      return
+    }
+
+    setOrderNameSuggestions([])
+    setShowOrderNameSuggestions(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -178,6 +244,8 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     setInstruction('')
     setSectionSuggestions([])
     setShowSectionSuggestions(false)
+    setOrderNameSuggestions([])
+    setShowOrderNameSuggestions(false)
     setLoading(false)
     window.location.reload()
   }
@@ -231,7 +299,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
         )}
       </div>
 
-      <div>
+      <div ref={orderWrapperRef} className="relative">
         <label className="mb-1.5 block text-sm font-medium text-gray-700">
           Section Order
         </label>
@@ -240,9 +308,40 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
           min="1"
           className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
           value={sectionOrder}
-          onChange={(e) => setSectionOrder(e.target.value)}
+          onChange={(e) => handleSectionOrderChange(e.target.value)}
+          onFocus={() => {
+            if (orderNameSuggestions.length > 0) {
+              setShowOrderNameSuggestions(true)
+            }
+          }}
           placeholder="e.g. 1"
         />
+
+        {showOrderNameSuggestions && sectionOrder.trim().length > 0 && (
+          <div className="absolute z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+            {orderNameSuggestions.length > 0 ? (
+              <div className="max-h-64 overflow-y-auto py-1">
+                {orderNameSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => {
+                      setSectionName(suggestion)
+                      setShowOrderNameSuggestions(false)
+                    }}
+                    className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="px-3 py-2 text-sm text-gray-500">
+                No matching sections for this order.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
