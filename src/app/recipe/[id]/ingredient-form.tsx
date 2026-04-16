@@ -214,16 +214,6 @@ export default function IngredientForm({ recipeId }: Props) {
         return
       }
 
-      await supabase.from('recipe_change_logs').insert({
-        recipe_id: recipeId,
-        entity_type: 'ingredient',
-        action_type: 'create',
-        item_name: trimmedName,
-        section_name: trimmedSectionName || null,
-        before_value: null,
-        after_value: `${parsedQuantity} ${unit}`,
-      })
-
       setMessage('Ingredient added successfully.')
       setName('')
       setQuantity('')
