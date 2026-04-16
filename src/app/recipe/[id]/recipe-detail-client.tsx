@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { supabase } from '../../lib/supabase'
 import IngredientForm from './ingredient-form'
 import IngredientEditRow from './ingredient-edit-row'
 import StepForm from './step-form'
@@ -28,6 +29,7 @@ type StepRow = {
   id: string
   step_number: number
   section_name: string | null
+  section_order: number | null
   instruction: string
 }
 
@@ -139,6 +141,12 @@ export default function RecipeDetailClient({
   const [targetServings, setTargetServings] = useState(
     String(recipe.base_servings)
   )
+  const [isEditingBaseServings, setIsEditingBaseServings] = useState(false)
+  const [baseServingsInput, setBaseServingsInput] = useState(
+    String(recipe.base_servings)
+  )
+  const [baseServingsMessage, setBaseServingsMessage] = useState('')
+  const [baseServingsLoading, setBaseServingsLoading] = useState(false)
 
   const multiplier = useMemo(() => {
     const target = Number(targetServings)
@@ -177,12 +185,70 @@ export default function RecipeDetailClient({
     })
 
     return Array.from(groups.entries())
-      .map(([section, rows]) => [
-        section,
-        rows.sort((a, b) => a.step_number - b.step_number),
-      ] as const)
-      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([section, rows]) => {
+        const sortedRows = rows.sort((a, b) => a.step_number - b.step_number)
+
+        const sectionOrderCandidates = sortedRows
+          .map((row) => row.section_order)
+          .filter((value): value is number => value !== null && value !== undefined)
+
+        const sectionOrder =
+          sectionOrderCandidates.length > 0
+            ? Math.min(...sectionOrderCandidates)
+            : Number.MAX_SAFE_INTEGER
+
+        return {
+          section,
+          sectionOrder,
+          rows: sortedRows,
+        }
+      })
+      .sort((a, b) => {
+        if (a.sectionOrder !== b.sectionOrder) {
+          return a.sectionOrder - b.sectionOrder
+        }
+        return a.section.localeCompare(b.section)
+      })
   }, [stepRows])
+
+  const handleSaveBaseServings = async () => {
+    const parsedBaseServings = Number(baseServingsInput)
+
+    if (!parsedBaseServings || parsedBaseServings <= 0) {
+      setBaseServingsMessage('Base servings must be greater than 0.')
+      return
+    }
+
+    setBaseServingsLoading(true)
+    setBaseServingsMessage('Saving...')
+
+    const { error } = await supabase
+      .from('recipes')
+      .update({
+        base_servings: parsedBaseServings,
+      })
+      .eq('id', recipe.id)
+
+    if (error) {
+      setBaseServingsMessage(`Error: ${error.message}`)
+      setBaseServingsLoading(false)
+      return
+    }
+
+    await supabase.from('recipe_change_logs').insert({
+      recipe_id: recipe.id,
+      entity_type: 'recipe',
+      action_type: 'update',
+      item_name: 'Base Servings',
+      section_name: null,
+      before_value: String(recipe.base_servings),
+      after_value: String(parsedBaseServings),
+    })
+
+    setBaseServingsLoading(false)
+    setIsEditingBaseServings(false)
+    window.location.reload()
+  }
 
   return (
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
@@ -205,7 +271,59 @@ export default function RecipeDetailClient({
               <div>Category: {recipe.category || '-'}</div>
               <div>Usage Type: {usageTypeLabel(recipe.usage_type)}</div>
               <div>Event Name: {recipe.event_name || '-'}</div>
-              <div>Base Servings: {recipe.base_servings}</div>
+              <div>
+                {!isEditingBaseServings ? (
+                  <div className="flex items-center gap-2">
+                    <span>Base Servings: {recipe.base_servings}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingBaseServings(true)}
+                      className="rounded border px-2 py-0.5 text-xs"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-gray-700">
+                      Base Servings
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="w-full max-w-[180px] rounded-xl border border-gray-300 px-3 py-2 text-sm"
+                      value={baseServingsInput}
+                      onChange={(e) => setBaseServingsInput(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveBaseServings}
+                        disabled={baseServingsLoading}
+                        className="rounded border px-3 py-1 text-xs"
+                      >
+                        {baseServingsLoading ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBaseServingsInput(String(recipe.base_servings))
+                          setBaseServingsMessage('')
+                          setIsEditingBaseServings(false)
+                        }}
+                        className="rounded border px-3 py-1 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    {baseServingsMessage ? (
+                      <div className="text-xs text-gray-500">
+                        {baseServingsMessage}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="text-sm text-gray-600">
@@ -283,14 +401,19 @@ export default function RecipeDetailClient({
               <h2 className="text-2xl font-semibold text-gray-900">Steps</h2>
 
               {groupedSteps.length ? (
-                groupedSteps.map(([section, rows]) => (
-                  <div key={section} className="space-y-3">
+                groupedSteps.map((group) => (
+                  <div key={group.section} className="space-y-3">
                     <div className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700">
-                      {section}
+                      {group.section}
+                      {group.sectionOrder !== Number.MAX_SAFE_INTEGER ? (
+                        <span className="ml-2 text-xs text-gray-500">
+                          (Order {group.sectionOrder})
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="space-y-3">
-                      {rows.map((step) => (
+                      {group.rows.map((step) => (
                         <StepEditRow key={step.id} step={step} />
                       ))}
                     </div>

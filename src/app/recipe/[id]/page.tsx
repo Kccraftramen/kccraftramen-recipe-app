@@ -36,6 +36,7 @@ export default async function RecipeDetailPage({ params }: PageProps) {
     .from('recipe_steps')
     .select('*')
     .eq('recipe_id', id)
+    .order('section_order', { ascending: true })
     .order('step_number', { ascending: true })
 
   const { data: changeLogs, error: changeLogError } = await supabase

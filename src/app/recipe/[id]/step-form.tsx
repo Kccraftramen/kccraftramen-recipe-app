@@ -11,6 +11,7 @@ type Props = {
 export default function StepForm({ recipeId, nextStepNumber }: Props) {
   const [stepNumber, setStepNumber] = useState(String(nextStepNumber))
   const [sectionName, setSectionName] = useState('')
+  const [sectionOrder, setSectionOrder] = useState('')
   const [instruction, setInstruction] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -87,11 +88,17 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     e.preventDefault()
 
     const parsedStepNumber = Number(stepNumber)
+    const parsedSectionOrder = sectionOrder ? Number(sectionOrder) : null
     const trimmedInstruction = instruction.trim()
     const trimmedSectionName = sectionName.trim()
 
     if (!parsedStepNumber || parsedStepNumber <= 0) {
       setMessage('Step number must be greater than 0.')
+      return
+    }
+
+    if (sectionOrder && (!parsedSectionOrder || parsedSectionOrder <= 0)) {
+      setMessage('Section order must be greater than 0.')
       return
     }
 
@@ -109,6 +116,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
         recipe_id: recipeId,
         step_number: parsedStepNumber,
         section_name: trimmedSectionName || null,
+        section_order: parsedSectionOrder,
         instruction: trimmedInstruction,
       })
 
@@ -117,11 +125,11 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       setLoading(false)
       return
     }
-    
 
     setMessage('Step added successfully.')
     setStepNumber(String(parsedStepNumber + 1))
     setSectionName('')
+    setSectionOrder('')
     setInstruction('')
     setSectionSuggestions([])
     setShowSectionSuggestions(false)
@@ -179,6 +187,20 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
             )}
           </div>
         )}
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Section Order
+        </label>
+        <input
+          type="number"
+          min="1"
+          className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+          value={sectionOrder}
+          onChange={(e) => setSectionOrder(e.target.value)}
+          placeholder="e.g. 1"
+        />
       </div>
 
       <div>

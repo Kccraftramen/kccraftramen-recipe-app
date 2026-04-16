@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import StepDeleteButton from './step-delete-button'
 
@@ -8,6 +8,7 @@ type StepRow = {
   id: string
   step_number: number
   section_name: string | null
+  section_order: number | null
   instruction: string
 }
 
@@ -18,16 +19,95 @@ type Props = {
 export default function StepEditRow({ step }: Props) {
   const [isEditing, setIsEditing] = useState(false)
   const [stepNumber, setStepNumber] = useState(String(step.step_number))
+  const [sectionName, setSectionName] = useState(step.section_name || '')
+  const [sectionOrder, setSectionOrder] = useState(
+    step.section_order ? String(step.section_order) : ''
+  )
   const [instruction, setInstruction] = useState(step.instruction)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
+  const [sectionSuggestions, setSectionSuggestions] = useState<string[]>([])
+  const [showSectionSuggestions, setShowSectionSuggestions] = useState(false)
+
+  const sectionWrapperRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        sectionWrapperRef.current &&
+        !sectionWrapperRef.current.contains(event.target as Node)
+      ) {
+        setShowSectionSuggestions(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const fetchSectionSuggestions = async (keyword: string) => {
+    const trimmedKeyword = keyword.trim()
+
+    if (!trimmedKeyword) {
+      setSectionSuggestions([])
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('recipe_steps')
+      .select('section_name')
+      .ilike('section_name', `%${trimmedKeyword}%`)
+      .limit(20)
+
+    if (error || !data) {
+      setSectionSuggestions([])
+      return
+    }
+
+    const uniqueValues = Array.from(
+      new Set(
+        (data as { section_name: string | null }[])
+          .map((row) => row.section_name)
+          .filter((value): value is string => Boolean(value?.trim()))
+          .map((value) => value.trim())
+      )
+    )
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 5)
+
+    setSectionSuggestions(uniqueValues)
+  }
+
+  const handleSectionChange = async (value: string) => {
+    setSectionName(value)
+
+    if (!value.trim()) {
+      setSectionSuggestions([])
+      setShowSectionSuggestions(false)
+      return
+    }
+
+    await fetchSectionSuggestions(value)
+    setShowSectionSuggestions(true)
+  }
+
   const handleSave = async () => {
     const parsedStepNumber = Number(stepNumber)
+    const parsedSectionOrder = sectionOrder ? Number(sectionOrder) : null
     const trimmedInstruction = instruction.trim()
+    const trimmedSectionName = sectionName.trim()
 
     if (!parsedStepNumber || parsedStepNumber <= 0) {
       setMessage('Step number must be greater than 0.')
+      return
+    }
+
+    if (sectionOrder && (!parsedSectionOrder || parsedSectionOrder <= 0)) {
+      setMessage('Section order must be greater than 0.')
       return
     }
 
@@ -41,7 +121,7 @@ export default function StepEditRow({ step }: Props) {
 
     const { data: currentRow, error: readError } = await supabase
       .from('recipe_steps')
-      .select('recipe_id, section_name, step_number, instruction')
+      .select('recipe_id, section_name, step_number, instruction, section_order')
       .eq('id', step.id)
       .single()
 
@@ -55,6 +135,8 @@ export default function StepEditRow({ step }: Props) {
       .from('recipe_steps')
       .update({
         step_number: parsedStepNumber,
+        section_name: trimmedSectionName || null,
+        section_order: parsedSectionOrder,
         instruction: trimmedInstruction,
       })
       .eq('id', step.id)
@@ -71,8 +153,8 @@ export default function StepEditRow({ step }: Props) {
       action_type: 'update',
       item_name: `Step ${currentRow.step_number}`,
       section_name: currentRow.section_name,
-      before_value: currentRow.instruction,
-      after_value: trimmedInstruction,
+      before_value: `Order: ${currentRow.section_order ?? '-'} / ${currentRow.instruction}`,
+      after_value: `Order: ${parsedSectionOrder ?? '-'} / ${trimmedInstruction}`,
     })
 
     setMessage('')
@@ -83,6 +165,8 @@ export default function StepEditRow({ step }: Props) {
 
   const handleCancel = () => {
     setStepNumber(String(step.step_number))
+    setSectionName(step.section_name || '')
+    setSectionOrder(step.section_order ? String(step.section_order) : '')
     setInstruction(step.instruction)
     setMessage('')
     setIsEditing(false)
@@ -94,12 +178,66 @@ export default function StepEditRow({ step }: Props) {
         {!isEditing ? (
           <>
             <div className="font-medium">Step {step.step_number}</div>
+            <div className="text-xs text-gray-500 mb-1">
+              Section Order: {step.section_order ?? '-'}
+            </div>
             <div className="text-sm text-gray-700 whitespace-pre-wrap">
               {step.instruction}
             </div>
           </>
         ) : (
           <div className="space-y-3">
+            <div ref={sectionWrapperRef} className="relative">
+              <label className="block text-sm mb-1">Section Name</label>
+              <input
+                className="border rounded px-3 py-2 w-full"
+                value={sectionName}
+                onChange={(e) => handleSectionChange(e.target.value)}
+                onFocus={() => {
+                  if (sectionSuggestions.length > 0) {
+                    setShowSectionSuggestions(true)
+                  }
+                }}
+              />
+
+              {showSectionSuggestions && sectionName.trim().length > 0 && (
+                <div className="absolute z-20 mt-2 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+                  {sectionSuggestions.length > 0 ? (
+                    <div className="max-h-64 overflow-y-auto py-1">
+                      {sectionSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => {
+                            setSectionName(suggestion)
+                            setShowSectionSuggestions(false)
+                          }}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      No matching sections. You can add a new one.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">Section Order</label>
+              <input
+                type="number"
+                min="1"
+                className="border rounded px-3 py-2 w-full"
+                value={sectionOrder}
+                onChange={(e) => setSectionOrder(e.target.value)}
+              />
+            </div>
+
             <div>
               <label className="block text-sm mb-1">Step Number</label>
               <input
