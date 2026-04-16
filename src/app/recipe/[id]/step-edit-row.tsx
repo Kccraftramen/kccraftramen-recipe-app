@@ -16,6 +16,11 @@ type Props = {
   step: StepRow
 }
 
+type ExistingSection = {
+  section_name: string | null
+  section_order: number | null
+}
+
 export default function StepEditRow({ step }: Props) {
   const [isEditing, setIsEditing] = useState(false)
   const [stepNumber, setStepNumber] = useState(String(step.step_number))
@@ -29,6 +34,7 @@ export default function StepEditRow({ step }: Props) {
 
   const [sectionSuggestions, setSectionSuggestions] = useState<string[]>([])
   const [showSectionSuggestions, setShowSectionSuggestions] = useState(false)
+  const [existingSections, setExistingSections] = useState<ExistingSection[]>([])
 
   const sectionWrapperRef = useRef<HTMLDivElement | null>(null)
 
@@ -49,6 +55,35 @@ export default function StepEditRow({ step }: Props) {
     }
   }, [])
 
+  useEffect(() => {
+    const loadExistingSections = async () => {
+      const { data: currentRow, error: currentRowError } = await supabase
+        .from('recipe_steps')
+        .select('recipe_id')
+        .eq('id', step.id)
+        .single()
+
+      if (currentRowError || !currentRow) {
+        setExistingSections([])
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('recipe_steps')
+        .select('section_name, section_order')
+        .eq('recipe_id', currentRow.recipe_id)
+
+      if (error || !data) {
+        setExistingSections([])
+        return
+      }
+
+      setExistingSections(data)
+    }
+
+    loadExistingSections()
+  }, [step.id])
+
   const fetchSectionSuggestions = async (keyword: string) => {
     const trimmedKeyword = keyword.trim()
 
@@ -57,22 +92,14 @@ export default function StepEditRow({ step }: Props) {
       return
     }
 
-    const { data, error } = await supabase
-      .from('recipe_steps')
-      .select('section_name')
-      .ilike('section_name', `%${trimmedKeyword}%`)
-      .limit(20)
-
-    if (error || !data) {
-      setSectionSuggestions([])
-      return
-    }
-
     const uniqueValues = Array.from(
       new Set(
-        (data as { section_name: string | null }[])
+        existingSections
           .map((row) => row.section_name)
           .filter((value): value is string => Boolean(value?.trim()))
+          .filter((value) =>
+            value.toLowerCase().includes(trimmedKeyword.toLowerCase())
+          )
           .map((value) => value.trim())
       )
     )
@@ -82,6 +109,20 @@ export default function StepEditRow({ step }: Props) {
     setSectionSuggestions(uniqueValues)
   }
 
+  const findExistingSectionOrder = (name: string) => {
+    const match = existingSections.find(
+      (row) =>
+        row.section_name?.trim().toLowerCase() === name.trim().toLowerCase() &&
+        row.section_order !== null
+    )
+
+    if (match?.section_order !== null && match?.section_order !== undefined) {
+      return String(match.section_order)
+    }
+
+    return ''
+  }
+
   const handleSectionChange = async (value: string) => {
     setSectionName(value)
 
@@ -89,6 +130,11 @@ export default function StepEditRow({ step }: Props) {
       setSectionSuggestions([])
       setShowSectionSuggestions(false)
       return
+    }
+
+    const matchedOrder = findExistingSectionOrder(value)
+    if (matchedOrder) {
+      setSectionOrder(matchedOrder)
     }
 
     await fetchSectionSuggestions(value)
@@ -153,8 +199,8 @@ export default function StepEditRow({ step }: Props) {
       action_type: 'update',
       item_name: `Step ${currentRow.step_number}`,
       section_name: currentRow.section_name,
-      before_value: `Order: ${currentRow.section_order ?? '-'} / ${currentRow.instruction}`,
-      after_value: `Order: ${parsedSectionOrder ?? '-'} / ${trimmedInstruction}`,
+      before_value: `Section: ${currentRow.section_name || '-'} / Order: ${currentRow.section_order ?? '-'} / ${currentRow.instruction}`,
+      after_value: `Section: ${trimmedSectionName || '-'} / Order: ${parsedSectionOrder ?? '-'} / ${trimmedInstruction}`,
     })
 
     setMessage('')
@@ -211,6 +257,12 @@ export default function StepEditRow({ step }: Props) {
                           onClick={() => {
                             setSectionName(suggestion)
                             setShowSectionSuggestions(false)
+
+                            const matchedOrder =
+                              findExistingSectionOrder(suggestion)
+                            if (matchedOrder) {
+                              setSectionOrder(matchedOrder)
+                            }
                           }}
                           className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
                         >

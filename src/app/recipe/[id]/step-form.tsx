@@ -8,6 +8,11 @@ type Props = {
   nextStepNumber: number
 }
 
+type ExistingSection = {
+  section_name: string | null
+  section_order: number | null
+}
+
 export default function StepForm({ recipeId, nextStepNumber }: Props) {
   const [stepNumber, setStepNumber] = useState(String(nextStepNumber))
   const [sectionName, setSectionName] = useState('')
@@ -18,6 +23,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
   const [sectionSuggestions, setSectionSuggestions] = useState<string[]>([])
   const [showSectionSuggestions, setShowSectionSuggestions] = useState(false)
+  const [existingSections, setExistingSections] = useState<ExistingSection[]>([])
 
   const sectionWrapperRef = useRef<HTMLDivElement | null>(null)
 
@@ -38,6 +44,24 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     }
   }, [])
 
+  useEffect(() => {
+    const loadExistingSections = async () => {
+      const { data, error } = await supabase
+        .from('recipe_steps')
+        .select('section_name, section_order')
+        .eq('recipe_id', recipeId)
+
+      if (error || !data) {
+        setExistingSections([])
+        return
+      }
+
+      setExistingSections(data)
+    }
+
+    loadExistingSections()
+  }, [recipeId])
+
   const fetchSectionSuggestions = async (keyword: string) => {
     const trimmedKeyword = keyword.trim()
 
@@ -46,22 +70,14 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       return
     }
 
-    const { data, error } = await supabase
-      .from('recipe_steps')
-      .select('section_name')
-      .ilike('section_name', `%${trimmedKeyword}%`)
-      .limit(20)
-
-    if (error || !data) {
-      setSectionSuggestions([])
-      return
-    }
-
     const uniqueValues = Array.from(
       new Set(
-        (data as { section_name: string | null }[])
+        existingSections
           .map((row) => row.section_name)
           .filter((value): value is string => Boolean(value?.trim()))
+          .filter((value) =>
+            value.toLowerCase().includes(trimmedKeyword.toLowerCase())
+          )
           .map((value) => value.trim())
       )
     )
@@ -69,6 +85,20 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       .slice(0, 5)
 
     setSectionSuggestions(uniqueValues)
+  }
+
+  const findExistingSectionOrder = (name: string) => {
+    const match = existingSections.find(
+      (row) =>
+        row.section_name?.trim().toLowerCase() === name.trim().toLowerCase() &&
+        row.section_order !== null
+    )
+
+    if (match?.section_order !== null && match?.section_order !== undefined) {
+      return String(match.section_order)
+    }
+
+    return ''
   }
 
   const handleSectionChange = async (value: string) => {
@@ -80,8 +110,23 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       return
     }
 
+    const matchedOrder = findExistingSectionOrder(value)
+    if (matchedOrder) {
+      setSectionOrder(matchedOrder)
+    }
+
     await fetchSectionSuggestions(value)
     setShowSectionSuggestions(true)
+  }
+
+  const handleSelectSectionSuggestion = (suggestion: string) => {
+    setSectionName(suggestion)
+    setShowSectionSuggestions(false)
+
+    const matchedOrder = findExistingSectionOrder(suggestion)
+    if (matchedOrder) {
+      setSectionOrder(matchedOrder)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,10 +215,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => {
-                      setSectionName(suggestion)
-                      setShowSectionSuggestions(false)
-                    }}
+                    onClick={() => handleSelectSectionSuggestion(suggestion)}
                     className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
                   >
                     {suggestion}
