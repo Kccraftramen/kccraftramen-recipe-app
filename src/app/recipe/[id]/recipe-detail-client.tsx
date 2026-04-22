@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { supabase } from '../../lib/supabase'
 import IngredientForm from './ingredient-form'
 import IngredientEditRow from './ingredient-edit-row'
+import RecipeMetaEditor from './recipe-meta-editor'
 import StepForm from './step-form'
 import StepEditRow from './step-edit-row'
 
@@ -96,23 +96,6 @@ function getUSUnit(value: number, unit: string) {
   return null
 }
 
-function usageTypeLabel(value: string | null) {
-  switch (value) {
-    case 'regular':
-      return 'Regular Menu'
-    case 'event':
-      return 'Event'
-    case 'obento':
-      return 'Obento'
-    case 'seasonal':
-      return 'Seasonal'
-    case 'prep':
-      return 'Prep Only'
-    default:
-      return value || '-'
-  }
-}
-
 function normalizeSectionName(value: string | null) {
   const trimmed = value?.trim()
   return trimmed || 'Other'
@@ -141,12 +124,6 @@ export default function RecipeDetailClient({
   const [targetServings, setTargetServings] = useState(
     String(recipe.base_servings)
   )
-  const [isEditingBaseServings, setIsEditingBaseServings] = useState(false)
-  const [baseServingsInput, setBaseServingsInput] = useState(
-    String(recipe.base_servings)
-  )
-  const [baseServingsMessage, setBaseServingsMessage] = useState('')
-  const [baseServingsLoading, setBaseServingsLoading] = useState(false)
 
   const multiplier = useMemo(() => {
     const target = Number(targetServings)
@@ -211,45 +188,6 @@ export default function RecipeDetailClient({
       })
   }, [stepRows])
 
-  const handleSaveBaseServings = async () => {
-    const parsedBaseServings = Number(baseServingsInput)
-
-    if (!parsedBaseServings || parsedBaseServings <= 0) {
-      setBaseServingsMessage('Base servings must be greater than 0.')
-      return
-    }
-
-    setBaseServingsLoading(true)
-    setBaseServingsMessage('Saving...')
-
-    const { error } = await supabase
-      .from('recipes')
-      .update({
-        base_servings: parsedBaseServings,
-      })
-      .eq('id', recipe.id)
-
-    if (error) {
-      setBaseServingsMessage(`Error: ${error.message}`)
-      setBaseServingsLoading(false)
-      return
-    }
-
-    await supabase.from('recipe_change_logs').insert({
-      recipe_id: recipe.id,
-      entity_type: 'recipe',
-      action_type: 'update',
-      item_name: 'Base Servings',
-      section_name: null,
-      before_value: String(recipe.base_servings),
-      after_value: String(parsedBaseServings),
-    })
-
-    setBaseServingsLoading(false)
-    setIsEditingBaseServings(false)
-    window.location.reload()
-  }
-
   return (
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
       <div className="mx-auto max-w-6xl">
@@ -261,74 +199,8 @@ export default function RecipeDetailClient({
             ← Back to list
           </a>
 
-          <div className="mt-5 space-y-3">
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-              {recipe.name}
-            </h1>
-
-            <div className="grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
-              <div>Author: {recipe.author || '-'}</div>
-              <div>Category: {recipe.category || '-'}</div>
-              <div>Usage Type: {usageTypeLabel(recipe.usage_type)}</div>
-              <div>Event Name: {recipe.event_name || '-'}</div>
-              <div>
-                {!isEditingBaseServings ? (
-                  <div className="flex items-center gap-2">
-                    <span>Base Servings: {recipe.base_servings}</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingBaseServings(true)}
-                      className="rounded border px-2 py-0.5 text-xs"
-                    >
-                      Edit
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <label className="block text-xs font-medium text-gray-700">
-                      Base Servings
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      className="w-full max-w-[180px] rounded-xl border border-gray-300 px-3 py-2 text-sm"
-                      value={baseServingsInput}
-                      onChange={(e) => setBaseServingsInput(e.target.value)}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSaveBaseServings}
-                        disabled={baseServingsLoading}
-                        className="rounded border px-3 py-1 text-xs"
-                      >
-                        {baseServingsLoading ? 'Saving...' : 'Save'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBaseServingsInput(String(recipe.base_servings))
-                          setBaseServingsMessage('')
-                          setIsEditingBaseServings(false)
-                        }}
-                        className="rounded border px-3 py-1 text-xs"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    {baseServingsMessage ? (
-                      <div className="text-xs text-gray-500">
-                        {baseServingsMessage}
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              Notes: {recipe.notes || '-'}
-            </div>
+          <div className="mt-5">
+            <RecipeMetaEditor recipe={recipe} />
           </div>
 
           <div className="mt-8 grid gap-6 xl:grid-cols-3">
