@@ -1,9 +1,10 @@
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
+import Link from 'next/link'
 import { supabase } from './lib/supabase'
 import RecipeForm from './components/recipe-form'
 import RecipeListClient from './components/recipe-list-client'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function HomePage() {
   const { data, error } = await supabase
@@ -26,16 +27,27 @@ export default async function HomePage() {
   return (
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
       <div className="mx-auto max-w-5xl space-y-8">
-        <header className="space-y-2">
-          <p className="text-sm font-medium uppercase tracking-wide text-white">
-            KC CRAFT RAMEN
+        <header className="space-y-3">
+          <p className="text-sm font-medium uppercase tracking-wide text-gray-900">
+            KC Craft Ramen
           </p>
-          <h1 className="text-4xl font-bold tracking-tight text-white">
+
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
             Recipe Manager
           </h1>
-          <p className="max-w-2xl text-sm text-white">
+
+          <p className="max-w-2xl text-sm text-gray-900">
             Manage recipes, ingredients, steps, scaling, and event-specific menu items in one place.
           </p>
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Link
+              href="/events"
+              className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-100"
+            >
+              Open Event Summary
+            </Link>
+          </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[1.05fr_1.4fr]">
