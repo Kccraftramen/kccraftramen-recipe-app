@@ -8,13 +8,14 @@ type Props = {
   nextStepNumber: number
 }
 
-type ExistingSection = {
+type ExistingStep = {
   section_name: string | null
   section_order: number | null
+  step_number: number
 }
 
-export default function StepForm({ recipeId, nextStepNumber }: Props) {
-  const [stepNumber, setStepNumber] = useState(String(nextStepNumber))
+export default function StepForm({ recipeId }: Props) {
+  const [stepNumber, setStepNumber] = useState('1')
   const [sectionName, setSectionName] = useState('')
   const [sectionOrder, setSectionOrder] = useState('')
   const [instruction, setInstruction] = useState('')
@@ -27,7 +28,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
   const [orderNameSuggestions, setOrderNameSuggestions] = useState<string[]>([])
   const [showOrderNameSuggestions, setShowOrderNameSuggestions] = useState(false)
 
-  const [existingSections, setExistingSections] = useState<ExistingSection[]>([])
+  const [existingSteps, setExistingSteps] = useState<ExistingStep[]>([])
 
   const sectionWrapperRef = useRef<HTMLDivElement | null>(null)
   const orderWrapperRef = useRef<HTMLDivElement | null>(null)
@@ -57,21 +58,21 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
   }, [])
 
   useEffect(() => {
-    const loadExistingSections = async () => {
+    const loadExistingSteps = async () => {
       const { data, error } = await supabase
         .from('recipe_steps')
-        .select('section_name, section_order')
+        .select('section_name, section_order, step_number')
         .eq('recipe_id', recipeId)
 
       if (error || !data) {
-        setExistingSections([])
+        setExistingSteps([])
         return
       }
 
-      setExistingSections(data)
+      setExistingSteps(data)
     }
 
-    loadExistingSections()
+    loadExistingSteps()
   }, [recipeId])
 
   const fetchSectionSuggestions = async (keyword: string) => {
@@ -84,7 +85,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
     const uniqueValues = Array.from(
       new Set(
-        existingSections
+        existingSteps
           .map((row) => row.section_name)
           .filter((value): value is string => Boolean(value?.trim()))
           .filter((value) =>
@@ -100,7 +101,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
   }
 
   const findExistingSectionOrder = (name: string) => {
-    const matches = existingSections.filter(
+    const matches = existingSteps.filter(
       (row) =>
         row.section_name?.trim().toLowerCase() === name.trim().toLowerCase() &&
         row.section_order !== null
@@ -117,6 +118,20 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     return ''
   }
 
+  const findNextStepNumberBySection = (name: string) => {
+    const matches = existingSteps.filter(
+      (row) =>
+        row.section_name?.trim().toLowerCase() === name.trim().toLowerCase()
+    )
+
+    if (matches.length === 0) {
+      return '1'
+    }
+
+    const maxStepNumber = Math.max(...matches.map((row) => row.step_number))
+    return String(maxStepNumber + 1)
+  }
+
   const findSectionNamesByOrder = (orderValue: string) => {
     const parsedOrder = Number(orderValue)
 
@@ -124,7 +139,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
     const names = Array.from(
       new Set(
-        existingSections
+        existingSteps
           .filter((row) => row.section_order === parsedOrder)
           .map((row) => row.section_name)
           .filter((value): value is string => Boolean(value?.trim()))
@@ -141,6 +156,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     if (!value.trim()) {
       setSectionSuggestions([])
       setShowSectionSuggestions(false)
+      setStepNumber('1')
       return
     }
 
@@ -150,6 +166,8 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       setOrderNameSuggestions([])
       setShowOrderNameSuggestions(false)
     }
+
+    setStepNumber(findNextStepNumberBySection(value))
 
     await fetchSectionSuggestions(value)
     setShowSectionSuggestions(true)
@@ -165,6 +183,8 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
       setOrderNameSuggestions([])
       setShowOrderNameSuggestions(false)
     }
+
+    setStepNumber(findNextStepNumberBySection(suggestion))
   }
 
   const handleSectionOrderChange = (value: string) => {
@@ -180,6 +200,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
 
     if (matchedNames.length === 1) {
       setSectionName(matchedNames[0])
+      setStepNumber(findNextStepNumberBySection(matchedNames[0]))
       setOrderNameSuggestions([])
       setShowOrderNameSuggestions(false)
       return
@@ -238,9 +259,9 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
     }
 
     setMessage('Step added successfully.')
-    setStepNumber(String(parsedStepNumber + 1))
     setSectionName('')
     setSectionOrder('')
+    setStepNumber('1')
     setInstruction('')
     setSectionSuggestions([])
     setShowSectionSuggestions(false)
@@ -327,6 +348,7 @@ export default function StepForm({ recipeId, nextStepNumber }: Props) {
                     type="button"
                     onClick={() => {
                       setSectionName(suggestion)
+                      setStepNumber(findNextStepNumberBySection(suggestion))
                       setShowOrderNameSuggestions(false)
                     }}
                     className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
