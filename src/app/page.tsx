@@ -28,15 +28,15 @@ export default async function HomePage() {
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="space-y-3">
-          <p className="text-sm font-medium uppercase tracking-wide text-white">
+          <p className="text-sm font-medium uppercase tracking-wide text-gray-900">
             KC Craft Ramen
           </p>
 
-          <h1 className="text-4xl font-bold tracking-tight text-white">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
             Recipe Manager
           </h1>
 
-          <p className="max-w-2xl text-sm text-white">
+          <p className="max-w-2xl text-sm text-gray-900">
             Manage recipes, ingredients, steps, scaling, and event-specific menu items in one place.
           </p>
 
@@ -46,6 +46,13 @@ export default async function HomePage() {
               className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-100"
             >
               Open Event Summary
+            </Link>
+
+            <Link
+              href="/events/book"
+              className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-100"
+            >
+              Open Event Recipe Book
             </Link>
           </div>
         </header>
