@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 type IngredientInfo = {
@@ -187,6 +188,15 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       <div className="p-6 space-y-4 print:hidden">
         <div className="flex items-start justify-between gap-4">
           <div>
+            <div className="mb-3">
+              <Link
+                href="/"
+                className="inline-flex rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                ← Back to Recipes
+              </Link>
+            </div>
+
             <h1 className="text-2xl font-bold">Event Recipe Book</h1>
             <p className="mt-1 text-sm text-gray-600">
               Set target servings, then click Download PDF.
