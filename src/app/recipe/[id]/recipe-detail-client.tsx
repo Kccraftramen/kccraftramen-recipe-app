@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '../../lib/supabase'
 import IngredientForm from './ingredient-form'
 import IngredientEditRow from './ingredient-edit-row'
 import RecipeMetaEditor from './recipe-meta-editor'
@@ -121,9 +123,13 @@ export default function RecipeDetailClient({
   stepRows,
   changeLogs,
 }: Props) {
+  const router = useRouter()
+
   const [targetServings, setTargetServings] = useState(
     String(recipe.base_servings)
   )
+  const [copyEventName, setCopyEventName] = useState(recipe.event_name || '')
+  const [isCopying, setIsCopying] = useState(false)
 
   const multiplier = useMemo(() => {
     const target = Number(targetServings)
@@ -188,6 +194,97 @@ export default function RecipeDetailClient({
       })
   }, [stepRows])
 
+  const handleCopyRecipe = async () => {
+    if (isCopying) return
+
+    const newEventName = copyEventName.trim()
+
+    if (!newEventName) {
+      alert('Please enter Event Name.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Copy "${recipe.name}" to event "${newEventName}"?`
+    )
+
+    if (!confirmed) return
+
+    setIsCopying(true)
+
+    try {
+      const { data: newRecipe, error: recipeError } = await supabase
+        .from('recipes')
+        .insert({
+          name: `${recipe.name} (Copy)`,
+          author: recipe.author,
+          category: recipe.category,
+          base_servings: recipe.base_servings,
+          notes: recipe.notes,
+          usage_type: recipe.usage_type,
+          event_name: newEventName,
+        })
+        .select('id')
+        .single()
+
+      if (recipeError) throw recipeError
+      if (!newRecipe?.id) throw new Error('New recipe ID was not created.')
+
+      const newRecipeId = newRecipe.id
+
+      if (ingredientRows.length > 0) {
+        const ingredientInserts = ingredientRows
+          .map((row) => {
+            const ingredient = Array.isArray(row.ingredients)
+              ? row.ingredients[0]
+              : row.ingredients
+
+            if (!ingredient?.id) return null
+
+            return {
+              recipe_id: newRecipeId,
+              ingredient_id: ingredient.id,
+              quantity: row.quantity,
+              unit: row.unit,
+              section_name: row.section_name,
+            }
+          })
+          .filter(Boolean)
+
+        if (ingredientInserts.length > 0) {
+          const { error: ingredientError } = await supabase
+            .from('recipe_ingredients')
+            .insert(ingredientInserts)
+
+          if (ingredientError) throw ingredientError
+        }
+      }
+
+      if (stepRows.length > 0) {
+        const stepInserts = stepRows.map((step) => ({
+          recipe_id: newRecipeId,
+          step_number: step.step_number,
+          section_name: step.section_name,
+          section_order: step.section_order,
+          instruction: step.instruction,
+        }))
+
+        const { error: stepError } = await supabase
+          .from('recipe_steps')
+          .insert(stepInserts)
+
+        if (stepError) throw stepError
+      }
+
+      router.push(`/recipe/${newRecipeId}`)
+      router.refresh()
+    } catch (error: any) {
+      alert(`Copy failed: ${error.message || 'Unknown error'}`)
+    } finally {
+      setIsCopying(false)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#E60012] px-6 py-10">
       <div className="mx-auto max-w-6xl">
@@ -199,12 +296,38 @@ export default function RecipeDetailClient({
             ← Back to list
           </a>
 
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+            <h2 className="text-xl font-semibold text-gray-900">Copy Recipe</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Copy this recipe, ingredients, and steps to a new event.
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3 md:flex-row">
+              <input
+                type="text"
+                value={copyEventName}
+                onChange={(e) => setCopyEventName(e.target.value)}
+                placeholder="New Event Name"
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-200"
+              />
+
+              <button
+                type="button"
+                onClick={handleCopyRecipe}
+                disabled={isCopying}
+                className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                {isCopying ? 'Copying...' : 'Copy Recipe'}
+              </button>
+            </div>
+          </div>
+
           <div className="mt-5">
             <RecipeMetaEditor recipe={recipe} />
           </div>
 
           <div className="mt-8 grid gap-6 xl:grid-cols-3">
-            <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-4">
+            <section className="space-y-4 rounded-2xl border border-gray-200 bg-gray-50 p-5">
               <h2 className="text-xl font-semibold text-gray-900">Scaling</h2>
 
               <div>
@@ -226,7 +349,7 @@ export default function RecipeDetailClient({
               </div>
             </section>
 
-            <div className="xl:col-span-2 grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 xl:col-span-2 lg:grid-cols-2">
               <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                 <IngredientForm recipeId={recipe.id} />
               </div>

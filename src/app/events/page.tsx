@@ -10,6 +10,7 @@ export default async function EventsPage() {
     .select(`
       id,
       name,
+      category,
       event_name,
       base_servings,
       usage_type,
