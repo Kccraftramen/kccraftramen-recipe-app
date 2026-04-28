@@ -25,11 +25,13 @@ type Props = {
 
 const allowedCategories = [
   'Sauce',
+  'Noodle',
   'Ramen Soup',
   'Ramen Paste',
   'Ramen Topping',
   'Ramen Kaeshi',
   'Ramen Oil',
+
 ]
 
 function getSubRecipe(row: SubRecipeRow) {
