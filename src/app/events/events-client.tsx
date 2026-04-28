@@ -18,6 +18,21 @@ type RecipeIngredientRow = {
   ingredients: IngredientInfo | IngredientInfo[]
 }
 
+type LinkedRecipeInfo = {
+  id: string
+  name: string
+  base_servings: number
+  recipe_ingredients: RecipeIngredientRow[]
+}
+
+type RecipeSubRecipeRow = {
+  id: string
+  quantity: number
+  unit: string
+  section_name: string | null
+  sub_recipe: LinkedRecipeInfo | LinkedRecipeInfo[] | null
+}
+
 type Recipe = {
   id: string
   name: string
@@ -26,6 +41,7 @@ type Recipe = {
   base_servings: number
   usage_type: string | null
   recipe_ingredients: RecipeIngredientRow[]
+  recipe_sub_recipes?: RecipeSubRecipeRow[]
 }
 
 type EventBuilder = {
@@ -112,6 +128,14 @@ function displayNormalizedUnit(value: number, unit: string) {
 function buildBookUrl(builderId: string) {
   if (!builderId) return '/events/book'
   return `/events/book?builder=${encodeURIComponent(builderId)}`
+}
+
+function getIngredient(row: RecipeIngredientRow) {
+  return Array.isArray(row.ingredients) ? row.ingredients[0] : row.ingredients
+}
+
+function getLinkedRecipe(row: RecipeSubRecipeRow) {
+  return Array.isArray(row.sub_recipe) ? row.sub_recipe[0] : row.sub_recipe
 }
 
 export default function EventsClient({ recipes }: Props) {
@@ -479,6 +503,8 @@ export default function EventsClient({ recipes }: Props) {
       quantity: number
       unit: string
       usUnit: string | null
+      sourceType: 'Ingredient' | 'Linked Recipe'
+      linkedRecipeName: string | null
     }[] = []
 
     activeRecipes.forEach((recipe) => {
@@ -486,16 +512,13 @@ export default function EventsClient({ recipes }: Props) {
 
       if (!target || target <= 0 || !recipe.base_servings) return
 
-      const multiplier = target / recipe.base_servings
+      const parentMultiplier = target / recipe.base_servings
 
       recipe.recipe_ingredients.forEach((row) => {
-        const ingredient = Array.isArray(row.ingredients)
-          ? row.ingredients[0]
-          : row.ingredients
-
+        const ingredient = getIngredient(row)
         if (!ingredient) return
 
-        const scaledQuantity = row.quantity * multiplier
+        const scaledQuantity = row.quantity * parentMultiplier
         const converted = convertUnit(scaledQuantity, row.unit)
         const usUnit = getUSUnit(converted.value, converted.unit)
 
@@ -507,6 +530,38 @@ export default function EventsClient({ recipes }: Props) {
           quantity: converted.value,
           unit: converted.unit,
           usUnit,
+          sourceType: 'Ingredient',
+          linkedRecipeName: null,
+        })
+      })
+
+      recipe.recipe_sub_recipes?.forEach((linkedRow) => {
+        const linkedRecipe = getLinkedRecipe(linkedRow)
+
+        if (!linkedRecipe || !linkedRecipe.base_servings) return
+
+        const requiredLinkedAmount = linkedRow.quantity * parentMultiplier
+        const linkedMultiplier = requiredLinkedAmount / linkedRecipe.base_servings
+
+        linkedRecipe.recipe_ingredients?.forEach((linkedIngredientRow) => {
+          const ingredient = getIngredient(linkedIngredientRow)
+          if (!ingredient) return
+
+          const scaledQuantity = linkedIngredientRow.quantity * linkedMultiplier
+          const converted = convertUnit(scaledQuantity, linkedIngredientRow.unit)
+          const usUnit = getUSUnit(converted.value, converted.unit)
+
+          rows.push({
+            recipeName: recipe.name,
+            eventName: recipe.event_name || '',
+            sectionName: linkedRow.section_name || linkedIngredientRow.section_name || 'Other',
+            ingredientName: ingredient.name,
+            quantity: converted.value,
+            unit: converted.unit,
+            usUnit,
+            sourceType: 'Linked Recipe',
+            linkedRecipeName: linkedRecipe.name,
+          })
         })
       })
     })
@@ -524,34 +579,52 @@ export default function EventsClient({ recipes }: Props) {
       }
     >()
 
+    const addToMap = (ingredientName: string, quantity: number, unit: string) => {
+      const normalized = normalizeForAggregation(quantity, unit)
+      const key = `${ingredientName}__${normalized.unit}`
+      const existing = map.get(key)
+
+      if (existing) {
+        existing.quantity += normalized.value
+      } else {
+        map.set(key, {
+          ingredientName,
+          canonicalUnit: normalized.unit,
+          quantity: normalized.value,
+        })
+      }
+    }
+
     activeRecipes.forEach((recipe) => {
       const target = Number(targetServingsMap[recipe.id])
 
       if (!target || target <= 0 || !recipe.base_servings) return
 
-      const multiplier = target / recipe.base_servings
+      const parentMultiplier = target / recipe.base_servings
 
       recipe.recipe_ingredients.forEach((row) => {
-        const ingredient = Array.isArray(row.ingredients)
-          ? row.ingredients[0]
-          : row.ingredients
-
+        const ingredient = getIngredient(row)
         if (!ingredient) return
 
-        const scaledQuantity = row.quantity * multiplier
-        const normalized = normalizeForAggregation(scaledQuantity, row.unit)
-        const key = `${ingredient.name}__${normalized.unit}`
-        const existing = map.get(key)
+        const scaledQuantity = row.quantity * parentMultiplier
+        addToMap(ingredient.name, scaledQuantity, row.unit)
+      })
 
-        if (existing) {
-          existing.quantity += normalized.value
-        } else {
-          map.set(key, {
-            ingredientName: ingredient.name,
-            canonicalUnit: normalized.unit,
-            quantity: normalized.value,
-          })
-        }
+      recipe.recipe_sub_recipes?.forEach((linkedRow) => {
+        const linkedRecipe = getLinkedRecipe(linkedRow)
+
+        if (!linkedRecipe || !linkedRecipe.base_servings) return
+
+        const requiredLinkedAmount = linkedRow.quantity * parentMultiplier
+        const linkedMultiplier = requiredLinkedAmount / linkedRecipe.base_servings
+
+        linkedRecipe.recipe_ingredients?.forEach((linkedIngredientRow) => {
+          const ingredient = getIngredient(linkedIngredientRow)
+          if (!ingredient) return
+
+          const scaledQuantity = linkedIngredientRow.quantity * linkedMultiplier
+          addToMap(ingredient.name, scaledQuantity, linkedIngredientRow.unit)
+        })
       })
     })
 
@@ -576,7 +649,17 @@ export default function EventsClient({ recipes }: Props) {
     if (!scaledRows.length) return
 
     const rows = [
-      ['Event', 'Recipe', 'Section', 'Ingredient', 'Quantity', 'Unit', 'US Unit'],
+      [
+        'Event',
+        'Recipe',
+        'Section',
+        'Ingredient',
+        'Quantity',
+        'Unit',
+        'US Unit',
+        'Source Type',
+        'Linked Recipe',
+      ],
       ...scaledRows.map((row) => [
         row.eventName,
         row.recipeName,
@@ -585,6 +668,8 @@ export default function EventsClient({ recipes }: Props) {
         formatNumber(row.quantity),
         row.unit,
         row.usUnit || '',
+        row.sourceType,
+        row.linkedRecipeName || '',
       ]),
     ]
 
@@ -1078,6 +1163,7 @@ export default function EventsClient({ recipes }: Props) {
                         <th className="px-3 py-2">Quantity</th>
                         <th className="px-3 py-2">Unit</th>
                         <th className="px-3 py-2">US Unit</th>
+                        <th className="px-3 py-2">Source</th>
                       </tr>
                     </thead>
 
@@ -1088,7 +1174,14 @@ export default function EventsClient({ recipes }: Props) {
                           className="border-b border-gray-100"
                         >
                           <td className="px-3 py-2">{row.eventName}</td>
-                          <td className="px-3 py-2">{row.recipeName}</td>
+                          <td className="px-3 py-2">
+                            {row.recipeName}
+                            {row.linkedRecipeName ? (
+                              <div className="text-xs text-gray-500">
+                                Linked: {row.linkedRecipeName}
+                              </div>
+                            ) : null}
+                          </td>
                           <td className="px-3 py-2">{row.sectionName}</td>
                           <td className="px-3 py-2">{row.ingredientName}</td>
                           <td className="px-3 py-2">
@@ -1096,6 +1189,7 @@ export default function EventsClient({ recipes }: Props) {
                           </td>
                           <td className="px-3 py-2">{row.unit}</td>
                           <td className="px-3 py-2">{row.usUnit || '-'}</td>
+                          <td className="px-3 py-2">{row.sourceType}</td>
                         </tr>
                       ))}
                     </tbody>

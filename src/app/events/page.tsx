@@ -24,6 +24,28 @@ export default async function EventsPage() {
           name,
           default_unit
         )
+      ),
+      recipe_sub_recipes (
+        id,
+        quantity,
+        unit,
+        section_name,
+        sub_recipe:recipes!recipe_sub_recipes_sub_recipe_id_fkey (
+          id,
+          name,
+          base_servings,
+          recipe_ingredients (
+            id,
+            quantity,
+            unit,
+            section_name,
+            ingredients (
+              id,
+              name,
+              default_unit
+            )
+          )
+        )
       )
     `)
     .not('event_name', 'is', null)
