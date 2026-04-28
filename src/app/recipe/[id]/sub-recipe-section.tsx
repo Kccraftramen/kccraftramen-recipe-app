@@ -29,6 +29,7 @@ const allowedCategories = [
   'Ramen Paste',
   'Ramen Topping',
   'Ramen Kaeshi',
+  'Ramen Oil',
 ]
 
 function getSubRecipe(row: SubRecipeRow) {
