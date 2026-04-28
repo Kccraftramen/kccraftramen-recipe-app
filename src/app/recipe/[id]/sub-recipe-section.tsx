@@ -60,7 +60,7 @@ export default function SubRecipeSection({
       `)
       .eq('parent_recipe_id', recipeId)
 
-    setRows(data || [])
+   setRows((data || []) as unknown as SubRecipeRow[])
   }
 
   const handleAdd = async () => {
