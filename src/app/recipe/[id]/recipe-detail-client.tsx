@@ -8,6 +8,7 @@ import IngredientEditRow from './ingredient-edit-row'
 import RecipeMetaEditor from './recipe-meta-editor'
 import StepForm from './step-form'
 import StepEditRow from './step-edit-row'
+import SubRecipeSection from './sub-recipe-section'
 
 type IngredientRow = {
   id: string
@@ -278,8 +279,10 @@ export default function RecipeDetailClient({
 
       router.push(`/recipe/${newRecipeId}`)
       router.refresh()
-    } catch (error: any) {
-      alert(`Copy failed: ${error.message || 'Unknown error'}`)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown error occurred.'
+      alert(`Copy failed: ${message}`)
     } finally {
       setIsCopying(false)
     }
@@ -421,6 +424,8 @@ export default function RecipeDetailClient({
               )}
             </section>
           </div>
+
+          <SubRecipeSection recipeId={recipe.id} />
 
           <div className="mt-10 space-y-4">
             <h2 className="text-2xl font-semibold text-gray-900">Change History</h2>
