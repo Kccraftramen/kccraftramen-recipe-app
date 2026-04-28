@@ -18,17 +18,13 @@ type SubRecipeRow = {
   sub_recipe: Recipe | Recipe[] | null
 }
 
-const allowedCategories = ['Sauce', 'Ramen Soup', 'Ramen Paste','Ramen Kaeshi','Ramen Topping']
+const allowedCategories = ['Sauce', 'Ramen Soup', 'Ramen Paste', 'Ramen Topping', 'Ramen Kaeshi']
 
 function getSubRecipe(row: SubRecipeRow) {
   return Array.isArray(row.sub_recipe) ? row.sub_recipe[0] : row.sub_recipe
 }
 
-export default function SubRecipeSection({
-  recipeId,
-}: {
-  recipeId: string
-}) {
+export default function SubRecipeSection({ recipeId }: { recipeId: string }) {
   const router = useRouter()
 
   const [recipes, setRecipes] = useState<Recipe[]>([])
@@ -58,7 +54,7 @@ export default function SubRecipeSection({
       .order('name', { ascending: true })
 
     if (recipesError) {
-      alert(`Failed to load recipes: ${recipesError.message}`)
+      alert(`Failed to load linked recipe options: ${recipesError.message}`)
       setIsLoading(false)
       return
     }
@@ -82,7 +78,7 @@ export default function SubRecipeSection({
       .order('created_at', { ascending: true })
 
     if (subRowsError) {
-      alert(`Failed to load sub recipes: ${subRowsError.message}`)
+      alert(`Failed to load linked recipes: ${subRowsError.message}`)
       setIsLoading(false)
       return
     }
@@ -95,7 +91,7 @@ export default function SubRecipeSection({
     if (isSaving) return
 
     if (!selectedRecipeId) {
-      alert('Please select a sub recipe.')
+      alert('Please select a linked recipe.')
       return
     }
 
@@ -117,7 +113,7 @@ export default function SubRecipeSection({
     })
 
     if (error) {
-      alert(`Failed to add sub recipe: ${error.message}`)
+      alert(`Failed to add linked recipe: ${error.message}`)
       setIsSaving(false)
       return
     }
@@ -133,7 +129,7 @@ export default function SubRecipeSection({
   }
 
   const handleDelete = async (id: string) => {
-    const confirmed = window.confirm('Delete this sub recipe link?')
+    const confirmed = window.confirm('Delete this linked recipe?')
     if (!confirmed) return
 
     const { error } = await supabase
@@ -142,7 +138,7 @@ export default function SubRecipeSection({
       .eq('id', id)
 
     if (error) {
-      alert(`Failed to delete sub recipe: ${error.message}`)
+      alert(`Failed to delete linked recipe: ${error.message}`)
       return
     }
 
@@ -151,106 +147,108 @@ export default function SubRecipeSection({
   }
 
   return (
-    <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Sub Recipes</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Add linked recipes such as sauce, ramen soup, or ramen paste.
-          </p>
-        </div>
-
-        <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-          Allowed: {allowedCategories.join(', ')}
-        </div>
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-semibold text-gray-900">
+          Linked Recipes
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Import another recipe as an ingredient, such as sauce, ramen soup, or ramen paste.
+        </p>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-[1.5fr_0.7fr_0.7fr_1fr]">
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-600">
-            Sub Recipe
-          </label>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 rounded-xl bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600">
+          Available categories: {allowedCategories.join(', ')}
+        </div>
 
-          <select
-            value={selectedRecipeId}
-            onChange={(e) => setSelectedRecipeId(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
-          >
-            <option value="">
-              {isLoading ? 'Loading...' : 'Select Sub Recipe'}
-            </option>
+        <div className="grid gap-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-600">
+              Linked Recipe
+            </label>
 
-            {recipes.map((recipe) => (
-              <option key={recipe.id} value={recipe.id}>
-                {recipe.name} ({recipe.category || '-'})
+            <select
+              value={selectedRecipeId}
+              onChange={(e) => setSelectedRecipeId(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+            >
+              <option value="">
+                {isLoading ? 'Loading...' : 'Select Linked Recipe'}
               </option>
-            ))}
-          </select>
-        </div>
 
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-600">
-            Quantity
-          </label>
+              {recipes.map((recipe) => (
+                <option key={recipe.id} value={recipe.id}>
+                  {recipe.name} ({recipe.category || '-'})
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="e.g. 80"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
-          />
-        </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">
+                Quantity
+              </label>
 
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-600">
-            Unit
-          </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g. 80"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              />
+            </div>
 
-          <select
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">
+                Unit
+              </label>
+
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              >
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="ml">ml</option>
+                <option value="L">L</option>
+                <option value="lb">lb</option>
+                <option value="gal">gal</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">
+                Section Name
+              </label>
+
+              <input
+                type="text"
+                placeholder="e.g. Sauce"
+                value={sectionName}
+                onChange={(e) => setSectionName(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={isSaving}
+            className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
-            <option value="g">g</option>
-            <option value="kg">kg</option>
-            <option value="ml">ml</option>
-            <option value="L">L</option>
-            <option value="lb">lb</option>
-            <option value="gal">gal</option>
-            <option value="pcs">pcs</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-600">
-            Section Name
-          </label>
-
-          <input
-            type="text"
-            placeholder="e.g. Sauce"
-            value={sectionName}
-            onChange={(e) => setSectionName(e.target.value)}
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
-          />
+            {isSaving ? 'Adding...' : 'Add Linked Recipe'}
+          </button>
         </div>
       </div>
 
-      <div className="mt-4">
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={isSaving}
-          className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          {isSaving ? 'Adding...' : 'Add Sub Recipe'}
-        </button>
-      </div>
-
-      <div className="mt-6 space-y-3">
+      <div className="space-y-3">
         {rows.length ? (
           rows.map((row) => {
             const subRecipe = getSubRecipe(row)
@@ -287,10 +285,10 @@ export default function SubRecipeSection({
           })
         ) : (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
-            No sub recipes yet.
+            No linked recipes yet.
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }

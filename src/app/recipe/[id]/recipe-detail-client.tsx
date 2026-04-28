@@ -395,6 +395,10 @@ export default function RecipeDetailClient({
               )}
             </section>
 
+            <SubRecipeSection recipeId={recipe.id} />
+          </div>
+
+          <div className="mt-8">
             <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-gray-900">Steps</h2>
 
@@ -424,8 +428,6 @@ export default function RecipeDetailClient({
               )}
             </section>
           </div>
-
-          <SubRecipeSection recipeId={recipe.id} />
 
           <div className="mt-10 space-y-4">
             <h2 className="text-2xl font-semibold text-gray-900">Change History</h2>
