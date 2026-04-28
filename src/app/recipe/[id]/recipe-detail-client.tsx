@@ -355,6 +355,10 @@ export default function RecipeDetailClient({
             <div className="grid gap-6 xl:col-span-2 lg:grid-cols-2">
               <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                 <IngredientForm recipeId={recipe.id} />
+
+                <div className="my-6 border-t border-gray-200" />
+
+                <SubRecipeSection recipeId={recipe.id} mode="form" />
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -388,17 +392,15 @@ export default function RecipeDetailClient({
                     </div>
                   </div>
                 ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
-                  No ingredients yet.
-                </div>
-              )}
+              ) : null}
+
+              <SubRecipeSection
+                recipeId={recipe.id}
+                mode="list"
+                showEmptyMessage={groupedIngredients.length === 0}
+              />
             </section>
 
-            <SubRecipeSection recipeId={recipe.id} />
-          </div>
-
-          <div className="mt-8">
             <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-gray-900">Steps</h2>
 
