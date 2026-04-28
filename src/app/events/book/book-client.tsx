@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 
 type IngredientInfo = {
@@ -98,6 +99,10 @@ function displayNormalizedUnit(value: number, unit: string) {
   }
 
   return { value, unit }
+}
+
+function safeSheetName(name: string) {
+  return name.replace(/[\\/?*[\]:]/g, '').slice(0, 31) || 'Recipe'
 }
 
 export default function BookClient({ recipes }: { recipes: Recipe[] }) {
@@ -410,6 +415,131 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       .sort((a, b) => a.ingredientName.localeCompare(b.ingredientName))
   }, [selectedRecipes, targets])
 
+  const handleDownloadExcel = () => {
+    if (!selectedRecipes.length) {
+      alert('Please select at least one recipe.')
+      return
+    }
+
+    const workbook = XLSX.utils.book_new()
+
+    const coverRows: (string | number)[][] = [
+      ['KC Craft Ramen'],
+      ['Event Recipe Book'],
+      [],
+      ['Book Title', bookTitle],
+      ['Included Recipes', selectedRecipes.length],
+      ['Generated At', new Date().toLocaleString()],
+      [],
+      ['Recipe Order'],
+      ['#', 'Recipe', 'Event', 'Category', 'Target Servings'],
+      ...selectedRecipes.map((recipe, index) => [
+        index + 1,
+        recipe.name,
+        recipe.event_name || '-',
+        recipe.category || '-',
+        targets[recipe.id] || '-',
+      ]),
+    ]
+
+    const coverSheet = XLSX.utils.aoa_to_sheet(coverRows)
+    coverSheet['!cols'] = [
+      { wch: 8 },
+      { wch: 34 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 18 },
+    ]
+    XLSX.utils.book_append_sheet(workbook, coverSheet, 'Cover')
+
+    selectedRecipes.forEach((recipe, recipeIndex) => {
+      const target = Number(targets[recipe.id]) || 0
+      const multiplier =
+        target && recipe.base_servings ? target / recipe.base_servings : 1
+
+      const rows: (string | number)[][] = []
+
+      rows.push(['Recipe Name', recipe.name])
+      rows.push(['Category', recipe.category || '-'])
+      rows.push(['Author', recipe.author || '-'])
+      rows.push(['Usage Type', usageTypeLabel(recipe.usage_type)])
+      rows.push(['Event Name', recipe.event_name || '-'])
+      rows.push(['Base Servings', recipe.base_servings])
+      rows.push(['Target Servings', target || '-'])
+      rows.push(['Multiplier', formatNumber(multiplier)])
+      rows.push([])
+      rows.push(['Ingredients'])
+      rows.push(['Section', 'Ingredient', 'Quantity', 'Unit'])
+
+      recipe.recipe_ingredients.forEach((ing) => {
+        const ingredient = Array.isArray(ing.ingredients)
+          ? ing.ingredients[0]
+          : ing.ingredients
+
+        rows.push([
+          normalizeSectionName(ing.section_name),
+          ingredient?.name || '',
+          formatNumber(ing.quantity * multiplier),
+          ing.unit,
+        ])
+      })
+
+      rows.push([])
+      rows.push(['Steps'])
+      rows.push(['Section', 'Step Number', 'Instruction'])
+
+      recipe.recipe_steps
+        .slice()
+        .sort((a, b) => {
+          const sectionA = a.section_order ?? Number.MAX_SAFE_INTEGER
+          const sectionB = b.section_order ?? Number.MAX_SAFE_INTEGER
+
+          if (sectionA !== sectionB) return sectionA - sectionB
+          return a.step_number - b.step_number
+        })
+        .forEach((step) => {
+          rows.push([
+            normalizeSectionName(step.section_name),
+            step.step_number,
+            step.instruction,
+          ])
+        })
+
+      if (recipe.notes) {
+        rows.push([])
+        rows.push(['Notes'])
+        rows.push([recipe.notes])
+      }
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows)
+      worksheet['!cols'] = [
+        { wch: 22 },
+        { wch: 34 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 80 },
+      ]
+
+      const sheetName = safeSheetName(`${recipeIndex + 1}. ${recipe.name}`)
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    })
+
+    const totalsRows: (string | number)[][] = [
+      ['Ingredient', 'Total Quantity', 'Unit'],
+      ...aggregatedRows.map((row) => [
+        row.ingredientName,
+        formatNumber(row.quantity),
+        row.unit,
+      ]),
+    ]
+
+    const totalsSheet = XLSX.utils.aoa_to_sheet(totalsRows)
+    totalsSheet['!cols'] = [{ wch: 36 }, { wch: 18 }, { wch: 12 }]
+    XLSX.utils.book_append_sheet(workbook, totalsSheet, 'Aggregated Totals')
+
+    XLSX.writeFile(workbook, `${safeSheetName(bookTitle)}.xlsx`)
+  }
+
   return (
     <div className="bg-white text-black print:bg-white">
       <div className="space-y-6 p-6 print:hidden">
@@ -433,21 +563,32 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
             <h1 className="text-2xl font-bold">Event Recipe Book</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Load from Event Builder or manually select recipes. PDF uses checked recipes in saved order.
+              Load from Event Builder or manually select recipes. PDF and Excel use checked recipes in saved order.
             </p>
             {isLoadingBuilder ? (
               <p className="mt-2 text-sm text-gray-500">Loading builder...</p>
             ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={!selectedRecipes.length}
-            className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            Download PDF
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              disabled={!selectedRecipes.length}
+              className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Download Excel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={!selectedRecipes.length}
+              className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              Download PDF
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1fr_1.5fr]">
@@ -602,7 +743,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                   Candidate Recipes
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Checked recipes will be included in the recipe book and PDF.
+                  Checked recipes will be included in the recipe book, PDF, and Excel.
                 </p>
               </div>
 
@@ -720,7 +861,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
             Recipe Order
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            This order is used for the printed recipe book.
+            This order is used for the printed recipe book and Excel tabs.
           </p>
 
           <div className="mt-4 space-y-3">
