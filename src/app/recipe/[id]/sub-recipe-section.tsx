@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import { supabase } from '../../lib/supabase'
 
 type Recipe = {
   id: string
   name: string
+  category: string | null
 }
 
 type SubRecipeRow = {
@@ -14,7 +15,13 @@ type SubRecipeRow = {
   quantity: number
   unit: string
   section_name: string | null
-  sub_recipe: Recipe
+  sub_recipe: Recipe | Recipe[] | null
+}
+
+const allowedCategories = ['Sauce', 'Ramen Soup', 'Ramen Paste','Ramen Kaeshi','Ramen Topping']
+
+function getSubRecipe(row: SubRecipeRow) {
+  return Array.isArray(row.sub_recipe) ? row.sub_recipe[0] : row.sub_recipe
 }
 
 export default function SubRecipeSection({
@@ -31,22 +38,34 @@ export default function SubRecipeSection({
   const [quantity, setQuantity] = useState('')
   const [unit, setUnit] = useState('g')
   const [sectionName, setSectionName] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const load = async () => {
-    // 全レシピ取得（選択用）
-    const { data: allRecipes } = await supabase
+    setIsLoading(true)
+
+    const { data: allRecipes, error: recipesError } = await supabase
       .from('recipes')
-      .select('id,name')
-      .order('name')
+      .select('id,name,category')
+      .in('category', allowedCategories)
+      .neq('id', recipeId)
+      .order('category', { ascending: true })
+      .order('name', { ascending: true })
 
-    setRecipes(allRecipes || [])
+    if (recipesError) {
+      alert(`Failed to load recipes: ${recipesError.message}`)
+      setIsLoading(false)
+      return
+    }
 
-    // サブレシピ取得
-    const { data } = await supabase
+    setRecipes((allRecipes || []) as Recipe[])
+
+    const { data: subRows, error: subRowsError } = await supabase
       .from('recipe_sub_recipes')
       .select(`
         id,
@@ -55,122 +74,222 @@ export default function SubRecipeSection({
         section_name,
         sub_recipe:recipes!recipe_sub_recipes_sub_recipe_id_fkey (
           id,
-          name
+          name,
+          category
         )
       `)
       .eq('parent_recipe_id', recipeId)
+      .order('created_at', { ascending: true })
 
-   setRows((data || []) as unknown as SubRecipeRow[])
-  }
-
-  const handleAdd = async () => {
-    if (!selectedRecipeId || !quantity) {
-      alert('Select recipe and quantity')
+    if (subRowsError) {
+      alert(`Failed to load sub recipes: ${subRowsError.message}`)
+      setIsLoading(false)
       return
     }
 
-    await supabase.from('recipe_sub_recipes').insert({
+    setRows((subRows || []) as unknown as SubRecipeRow[])
+    setIsLoading(false)
+  }
+
+  const handleAdd = async () => {
+    if (isSaving) return
+
+    if (!selectedRecipeId) {
+      alert('Please select a sub recipe.')
+      return
+    }
+
+    const qty = Number(quantity)
+
+    if (!qty || qty <= 0) {
+      alert('Quantity must be greater than 0.')
+      return
+    }
+
+    setIsSaving(true)
+
+    const { error } = await supabase.from('recipe_sub_recipes').insert({
       parent_recipe_id: recipeId,
       sub_recipe_id: selectedRecipeId,
-      quantity: Number(quantity),
+      quantity: qty,
       unit,
-      section_name: sectionName || null,
+      section_name: sectionName.trim() || null,
     })
+
+    if (error) {
+      alert(`Failed to add sub recipe: ${error.message}`)
+      setIsSaving(false)
+      return
+    }
 
     setSelectedRecipeId('')
     setQuantity('')
+    setUnit('g')
     setSectionName('')
 
     await load()
     router.refresh()
+    setIsSaving(false)
   }
 
   const handleDelete = async (id: string) => {
-    await supabase
+    const confirmed = window.confirm('Delete this sub recipe link?')
+    if (!confirmed) return
+
+    const { error } = await supabase
       .from('recipe_sub_recipes')
       .delete()
       .eq('id', id)
+
+    if (error) {
+      alert(`Failed to delete sub recipe: ${error.message}`)
+      return
+    }
 
     await load()
     router.refresh()
   }
 
   return (
-    <div className="mt-10 rounded-2xl border bg-white p-6">
-      <h2 className="text-lg font-bold mb-4">Sub Recipes</h2>
+    <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">Sub Recipes</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Add linked recipes such as sauce, ramen soup, or ramen paste.
+          </p>
+        </div>
 
-      {/* 追加フォーム */}
-      <div className="grid md:grid-cols-4 gap-3 mb-4">
-        <select
-          value={selectedRecipeId}
-          onChange={(e) => setSelectedRecipeId(e.target.value)}
-          className="border rounded p-2 text-sm"
-        >
-          <option value="">Select Recipe</option>
-          {recipes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          placeholder="Qty"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          className="border rounded p-2 text-sm"
-        />
-
-        <select
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          className="border rounded p-2 text-sm"
-        >
-          <option>g</option>
-          <option>ml</option>
-          <option>pcs</option>
-        </select>
-
-        <input
-          placeholder="Section"
-          value={sectionName}
-          onChange={(e) => setSectionName(e.target.value)}
-          className="border rounded p-2 text-sm"
-        />
+        <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+          Allowed: {allowedCategories.join(', ')}
+        </div>
       </div>
 
-      <button
-        onClick={handleAdd}
-        className="mb-6 bg-black text-white px-4 py-2 rounded"
-      >
-        Add Sub Recipe
-      </button>
+      <div className="mt-5 grid gap-3 md:grid-cols-[1.5fr_0.7fr_0.7fr_1fr]">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-600">
+            Sub Recipe
+          </label>
 
-      {/* 一覧 */}
-      <div className="space-y-3">
-        {rows.map((row) => (
-          <div
-            key={row.id}
-            className="flex justify-between items-center border p-3 rounded"
+          <select
+            value={selectedRecipeId}
+            onChange={(e) => setSelectedRecipeId(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
           >
-            <div>
-              <div className="font-semibold">
-                {row.sub_recipe?.name}
-              </div>
-              <div className="text-sm text-gray-500">
-                {row.quantity} {row.unit} / {row.section_name || 'Other'}
-              </div>
-            </div>
+            <option value="">
+              {isLoading ? 'Loading...' : 'Select Sub Recipe'}
+            </option>
 
-            <button
-              onClick={() => handleDelete(row.id)}
-              className="text-red-500 text-sm"
-            >
-              Delete
-            </button>
+            {recipes.map((recipe) => (
+              <option key={recipe.id} value={recipe.id}>
+                {recipe.name} ({recipe.category || '-'})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-600">
+            Quantity
+          </label>
+
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="e.g. 80"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-600">
+            Unit
+          </label>
+
+          <select
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+          >
+            <option value="g">g</option>
+            <option value="kg">kg</option>
+            <option value="ml">ml</option>
+            <option value="L">L</option>
+            <option value="lb">lb</option>
+            <option value="gal">gal</option>
+            <option value="pcs">pcs</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-gray-600">
+            Section Name
+          </label>
+
+          <input
+            type="text"
+            placeholder="e.g. Sauce"
+            value={sectionName}
+            onChange={(e) => setSectionName(e.target.value)}
+            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={isSaving}
+          className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          {isSaving ? 'Adding...' : 'Add Sub Recipe'}
+        </button>
+      </div>
+
+      <div className="mt-6 space-y-3">
+        {rows.length ? (
+          rows.map((row) => {
+            const subRecipe = getSubRecipe(row)
+
+            return (
+              <div
+                key={row.id}
+                className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4"
+              >
+                <div>
+                  <div className="font-semibold text-gray-900">
+                    {subRecipe?.name || 'Unknown Recipe'}
+                  </div>
+
+                  <div className="mt-1 text-sm text-gray-600">
+                    {row.quantity} {row.unit} / Section:{' '}
+                    {row.section_name || 'Other'}
+                  </div>
+
+                  <div className="mt-1 text-xs text-gray-500">
+                    Category: {subRecipe?.category || '-'}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleDelete(row.id)}
+                  className="rounded-xl border border-red-300 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                >
+                  Delete
+                </button>
+              </div>
+            )
+          })
+        ) : (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+            No sub recipes yet.
           </div>
-        ))}
+        )}
       </div>
     </div>
   )
