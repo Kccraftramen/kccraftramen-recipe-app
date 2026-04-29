@@ -373,11 +373,14 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
     sectionName: string
   ) => {
     const normalized = normalizeForAggregation(requiredQuantity, unit)
-    const key = `${linkedRecipe.id}__${normalized.unit}`
+
+    // 🔥 同じレシピは1つに統一
+    const key = linkedRecipe.id
     const existing = map.get(key)
 
     if (existing) {
       existing.totalRequiredCanonical += normalized.value
+
       existing.usedBy.push({
         parentRecipeName,
         requiredQuantity,
@@ -453,13 +456,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         ? roundUpToHalf(target / recipe.base_servings)
         : 1
 
-    expandLinks(
-      recipe,
-      parentMultiplier,
-      recipe.name,
-      1,
-      new Set([recipe.id])
-    )
+    expandLinks(recipe, parentMultiplier, recipe.name, 1, new Set([recipe.id]))
   })
 
   return Array.from(map.values())
@@ -469,18 +466,34 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         item.canonicalUnit
       )
 
+      const multiplier =
+        item.linkedRecipe.base_servings > 0
+          ? roundUpToHalf(
+              item.totalRequiredCanonical / item.linkedRecipe.base_servings
+            )
+          : 1
+
+      // 🔥 子のLinkedもここで計算（これが今足りてない）
+      const linkedRecipesUsed =
+        item.linkedRecipe.parent_sub_recipes?.map((link) => {
+          const nested = getLinkedRecipe(link)
+
+          return {
+            name: nested?.name || '',
+            requiredQuantity: link.quantity * multiplier,
+            unit: link.unit,
+            sectionName: normalizeSectionName(link.section_name),
+          }
+        }) || []
+
       return {
         linkedRecipe: item.linkedRecipe,
         canonicalUnit: item.canonicalUnit,
         totalRequiredCanonical: item.totalRequiredCanonical,
         displayRequired,
-        multiplier:
-          item.linkedRecipe.base_servings > 0
-            ? roundUpToHalf(
-                item.totalRequiredCanonical / item.linkedRecipe.base_servings
-              )
-            : 1,
+        multiplier,
         usedBy: item.usedBy,
+        linkedRecipesUsed,
       }
     })
     .sort((a, b) => a.linkedRecipe.name.localeCompare(b.linkedRecipe.name))
@@ -1441,6 +1454,23 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                   </div>
                 ))}
               </div>
+              {page.linkedRecipesUsed.length > 0 ? (
+  <div className="mt-5">
+    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      Linked Recipes
+    </div>
+
+    <div className="space-y-1">
+      {page.linkedRecipesUsed.map((link, index) => (
+        <div key={`${link.name}-${index}`} className="text-sm">
+          {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}
+          {' / Section: '}
+          {link.sectionName}
+        </div>
+      ))}
+    </div>
+  </div>
+) : null}
             </div>
 
             <div className="mt-8">
