@@ -457,7 +457,9 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
     selectedRecipes.forEach((recipe) => {
       const target = Number(targets[recipe.id]) || 0
       const multiplier =
-        target && recipe.base_servings ? target / recipe.base_servings : 1
+        target && recipe.base_servings
+       ? roundUpToHalf(target / recipe.base_servings)
+        : 1
 
       recipe.recipe_ingredients.forEach((ing) => {
         const ingredient = getIngredient(ing)
@@ -631,7 +633,9 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
     selectedRecipes.forEach((recipe, recipeIndex) => {
       const target = Number(targets[recipe.id]) || 0
       const multiplier =
-        target && recipe.base_servings ? target / recipe.base_servings : 1
+        target && recipe.base_servings
+       ? roundUpToHalf(target / recipe.base_servings)
+        : 1
 
       const rows: (string | number)[][] = []
 
