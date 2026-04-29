@@ -47,10 +47,7 @@ export default async function BookPage() {
             quantity,
             unit,
             section_name,
-            ingredients (
-              id,
-              name
-            )
+            ingredients ( id, name )
           ),
           recipe_steps (
             id,
@@ -58,6 +55,56 @@ export default async function BookPage() {
             section_name,
             section_order,
             instruction
+          ),
+          parent_sub_recipes:recipe_sub_recipes!recipe_sub_recipes_parent_recipe_id_fkey (
+            id,
+            quantity,
+            unit,
+            section_name,
+            sub_recipe:recipes!recipe_sub_recipes_sub_recipe_id_fkey (
+              id,
+              name,
+              base_servings,
+              recipe_ingredients (
+                id,
+                quantity,
+                unit,
+                section_name,
+                ingredients ( id, name )
+              ),
+              recipe_steps (
+                id,
+                step_number,
+                section_name,
+                section_order,
+                instruction
+              ),
+              parent_sub_recipes:recipe_sub_recipes!recipe_sub_recipes_parent_recipe_id_fkey (
+                id,
+                quantity,
+                unit,
+                section_name,
+                sub_recipe:recipes!recipe_sub_recipes_sub_recipe_id_fkey (
+                  id,
+                  name,
+                  base_servings,
+                  recipe_ingredients (
+                    id,
+                    quantity,
+                    unit,
+                    section_name,
+                    ingredients ( id, name )
+                  ),
+                  recipe_steps (
+                    id,
+                    step_number,
+                    section_name,
+                    section_order,
+                    instruction
+                  )
+                )
+              )
+            )
           )
         )
       )

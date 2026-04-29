@@ -33,6 +33,7 @@ type LinkedRecipeInfo = {
   base_servings: number
   recipe_ingredients: RecipeIngredient[]
   recipe_steps: RecipeStep[]
+  parent_sub_recipes?: RecipeSubRecipe[]
 }
 
 type RecipeSubRecipe = {
@@ -354,82 +355,136 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         : 'Event Recipe Book')
 
   const linkedRecipePages = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        linkedRecipe: LinkedRecipeInfo
-        canonicalUnit: string
-        totalRequiredCanonical: number
-        usedBy: LinkedRecipeBookPage['usedBy']
-      }
-    >()
+  const map = new Map<
+    string,
+    {
+      linkedRecipe: LinkedRecipeInfo
+      canonicalUnit: string
+      totalRequiredCanonical: number
+      usedBy: LinkedRecipeBookPage['usedBy']
+    }
+  >()
 
-    selectedRecipes.forEach((recipe) => {
-      const target = Number(targets[recipe.id]) || 0
-      const parentMultiplier =
-        target && recipe.base_servings
-          ? roundUpToHalf(target / recipe.base_servings)
+  const addLinkedRecipe = (
+    linkedRecipe: LinkedRecipeInfo,
+    requiredQuantity: number,
+    unit: string,
+    parentRecipeName: string,
+    sectionName: string
+  ) => {
+    const normalized = normalizeForAggregation(requiredQuantity, unit)
+    const key = `${linkedRecipe.id}__${normalized.unit}`
+    const existing = map.get(key)
+
+    if (existing) {
+      existing.totalRequiredCanonical += normalized.value
+      existing.usedBy.push({
+        parentRecipeName,
+        requiredQuantity,
+        unit,
+        sectionName,
+      })
+    } else {
+      map.set(key, {
+        linkedRecipe,
+        canonicalUnit: normalized.unit,
+        totalRequiredCanonical: normalized.value,
+        usedBy: [
+          {
+            parentRecipeName,
+            requiredQuantity,
+            unit,
+            sectionName,
+          },
+        ],
+      })
+    }
+  }
+
+  const expandLinks = (
+    recipe: Recipe | LinkedRecipeInfo,
+    parentMultiplier: number,
+    parentRecipeName: string,
+    depth: number,
+    visitedRecipeIds: Set<string>
+  ) => {
+    if (depth > 3) return
+
+    recipe.parent_sub_recipes?.forEach((link) => {
+      const linkedRecipe = getLinkedRecipe(link)
+      if (!linkedRecipe) return
+      if (visitedRecipeIds.has(linkedRecipe.id)) return
+
+      const requiredQuantity = link.quantity * parentMultiplier
+
+      addLinkedRecipe(
+        linkedRecipe,
+        requiredQuantity,
+        link.unit,
+        parentRecipeName,
+        normalizeSectionName(link.section_name)
+      )
+
+      const normalized = normalizeForAggregation(requiredQuantity, link.unit)
+
+      const linkedMultiplier =
+        linkedRecipe.base_servings > 0
+          ? roundUpToHalf(normalized.value / linkedRecipe.base_servings)
           : 1
 
-      recipe.parent_sub_recipes?.forEach((link) => {
-        const linkedRecipe = getLinkedRecipe(link)
-        if (!linkedRecipe) return
+      const nextVisited = new Set(visitedRecipeIds)
+      nextVisited.add(linkedRecipe.id)
 
-        const requiredQuantity = link.quantity * parentMultiplier
-        const normalized = normalizeForAggregation(requiredQuantity, link.unit)
-
-        const key = `${linkedRecipe.id}__${normalized.unit}`
-        const existing = map.get(key)
-
-        if (existing) {
-          existing.totalRequiredCanonical += normalized.value
-          existing.usedBy.push({
-            parentRecipeName: recipe.name,
-            requiredQuantity,
-            unit: link.unit,
-            sectionName: normalizeSectionName(link.section_name),
-          })
-        } else {
-          map.set(key, {
-            linkedRecipe,
-            canonicalUnit: normalized.unit,
-            totalRequiredCanonical: normalized.value,
-            usedBy: [
-              {
-                parentRecipeName: recipe.name,
-                requiredQuantity,
-                unit: link.unit,
-                sectionName: normalizeSectionName(link.section_name),
-              },
-            ],
-          })
-        }
-      })
+      expandLinks(
+        linkedRecipe,
+        linkedMultiplier,
+        linkedRecipe.name,
+        depth + 1,
+        nextVisited
+      )
     })
+  }
 
-    return Array.from(map.values())
-      .map((item) => {
-        const displayRequired = displayNormalizedUnit(
-          item.totalRequiredCanonical,
-          item.canonicalUnit
-        )
+  selectedRecipes.forEach((recipe) => {
+    const target = Number(targets[recipe.id]) || 0
 
-        return {
-          linkedRecipe: item.linkedRecipe,
-          canonicalUnit: item.canonicalUnit,
-          totalRequiredCanonical: item.totalRequiredCanonical,
-          displayRequired,
-          multiplier:
-            item.linkedRecipe.base_servings > 0
-              ? roundUpToHalf(
-                  item.totalRequiredCanonical / item.linkedRecipe.base_servings
-                )
-              : 1,
-          usedBy: item.usedBy,
-        }
-      })
-      .sort((a, b) => a.linkedRecipe.name.localeCompare(b.linkedRecipe.name))
-  }, [selectedRecipes, targets])
+    const parentMultiplier =
+      target && recipe.base_servings
+        ? roundUpToHalf(target / recipe.base_servings)
+        : 1
+
+    expandLinks(
+      recipe,
+      parentMultiplier,
+      recipe.name,
+      1,
+      new Set([recipe.id])
+    )
+  })
+
+  return Array.from(map.values())
+    .map((item) => {
+      const displayRequired = displayNormalizedUnit(
+        item.totalRequiredCanonical,
+        item.canonicalUnit
+      )
+
+      return {
+        linkedRecipe: item.linkedRecipe,
+        canonicalUnit: item.canonicalUnit,
+        totalRequiredCanonical: item.totalRequiredCanonical,
+        displayRequired,
+        multiplier:
+          item.linkedRecipe.base_servings > 0
+            ? roundUpToHalf(
+                item.totalRequiredCanonical / item.linkedRecipe.base_servings
+              )
+            : 1,
+        usedBy: item.usedBy,
+      }
+    })
+    .sort((a, b) => a.linkedRecipe.name.localeCompare(b.linkedRecipe.name))
+}, [selectedRecipes, targets])
 
   const aggregatedRows = useMemo(() => {
     const map = new Map<
