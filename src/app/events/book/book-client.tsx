@@ -1323,27 +1323,29 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                 ))}
               </div>
 
-              {recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0 ? (
-  <div className="mt-5">
-    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
-      Linked Recipes
-    </div>
+             {recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0 ? (
+  <div className="mt-5 space-y-5">
+    {Object.entries(groupedParentLinkedRecipes).map(([section, links]) => (
+      <div key={section}>
+        <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+          {section}
+        </div>
 
-    <div className="space-y-1">
-      {recipe.parent_sub_recipes.map((link) => {
-        const linkedRecipe = getLinkedRecipe(link)
-        if (!linkedRecipe) return null
+        <div className="space-y-1">
+          {links.map((link) => {
+            const linkedRecipe = getLinkedRecipe(link)
+            if (!linkedRecipe) return null
 
-        return (
-          <div key={link.id} className="text-sm">
-            {linkedRecipe.name} — {formatNumber(link.quantity * multiplier)}{' '}
-            {link.unit}
-            {' / Section: '}
-            {normalizeSectionName(link.section_name)}
-          </div>
-        )
-      })}
-    </div>
+            return (
+              <div key={link.id} className="text-sm">
+                {linkedRecipe.name} — {formatNumber(link.quantity * multiplier)}{' '}
+                {link.unit}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    ))}
   </div>
 ) : null}
                  </div>
@@ -1406,6 +1408,16 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
   {}
 )
         const groupedSteps = groupSteps(page.linkedRecipe.recipe_steps)
+
+        const groupedParentLinkedRecipes = (recipe.parent_sub_recipes || []).reduce(
+  (acc: Record<string, RecipeSubRecipe[]>, link) => {
+    const section = normalizeSectionName(link.section_name)
+    if (!acc[section]) acc[section] = []
+    acc[section].push(link)
+    return acc
+  },
+  {}
+)
 
         return (
           <div key={`${page.linkedRecipe.id}-${page.canonicalUnit}`} className="p-10 page-break">
