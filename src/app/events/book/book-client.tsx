@@ -733,21 +733,20 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         ])
       })
 
-      if (recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0) {
+     if (linkedRecipePages.length > 0) {
   rows.push([])
   rows.push(['Linked Recipes'])
   rows.push(['Section', 'Recipe Name', 'Quantity', 'Unit'])
 
-  recipe.parent_sub_recipes.forEach((link) => {
-    const linkedRecipe = getLinkedRecipe(link)
-    if (!linkedRecipe) return
-
-    rows.push([
-      normalizeSectionName(link.section_name),
-      linkedRecipe.name,
-      formatNumber(link.quantity * multiplier),
-      link.unit,
-    ])
+  linkedRecipePages.forEach((page) => {
+    page.usedBy.forEach((usage) => {
+      rows.push([
+        usage.sectionName,
+        page.linkedRecipe.name,
+        formatNumber(usage.requiredQuantity),
+        usage.unit,
+      ])
+    })
   })
 }
 
