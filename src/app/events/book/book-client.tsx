@@ -27,6 +27,22 @@ type RecipeStep = {
   instruction: string
 }
 
+type LinkedRecipeInfo = {
+  id: string
+  name: string
+  base_servings: number
+  recipe_ingredients: RecipeIngredient[]
+  recipe_steps: RecipeStep[]
+}
+
+type RecipeSubRecipe = {
+  id: string
+  quantity: number
+  unit: string
+  section_name: string | null
+  sub_recipe: LinkedRecipeInfo | LinkedRecipeInfo[] | null
+}
+
 type Recipe = {
   id: string
   name: string
@@ -38,6 +54,7 @@ type Recipe = {
   notes: string | null
   recipe_ingredients: RecipeIngredient[]
   recipe_steps: RecipeStep[]
+  parent_sub_recipes?: RecipeSubRecipe[]
 }
 
 type EventBuilder = {
@@ -90,19 +107,21 @@ function normalizeForAggregation(value: number, unit: string) {
 }
 
 function displayNormalizedUnit(value: number, unit: string) {
-  if (unit === 'g' && value >= 1000) {
-    return { value: value / 1000, unit: 'kg' }
-  }
-
-  if (unit === 'ml' && value >= 1000) {
-    return { value: value / 1000, unit: 'L' }
-  }
-
+  if (unit === 'g' && value >= 1000) return { value: value / 1000, unit: 'kg' }
+  if (unit === 'ml' && value >= 1000) return { value: value / 1000, unit: 'L' }
   return { value, unit }
 }
 
 function safeSheetName(name: string) {
   return name.replace(/[\\/?*[\]:]/g, '').slice(0, 31) || 'Recipe'
+}
+
+function getIngredient(row: RecipeIngredient) {
+  return Array.isArray(row.ingredients) ? row.ingredients[0] : row.ingredients
+}
+
+function getLinkedRecipe(row: RecipeSubRecipe) {
+  return Array.isArray(row.sub_recipe) ? row.sub_recipe[0] : row.sub_recipe
 }
 
 export default function BookClient({ recipes }: { recipes: Recipe[] }) {
@@ -142,7 +161,6 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
   const recipesFromSelectedEvents = useMemo(() => {
     if (!selectedEvents.length) return []
-
     return recipes.filter((recipe) =>
       selectedEvents.includes(recipe.event_name || '')
     )
@@ -313,11 +331,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
   }
 
   const handleRecipeToggle = (recipeId: string, checked: boolean) => {
-    if (checked) {
-      addRecipeIds([recipeId])
-    } else {
-      removeRecipeIds([recipeId])
-    }
+    if (checked) addRecipeIds([recipeId])
+    else removeRecipeIds([recipeId])
   }
 
   const moveRecipe = (recipeId: string, direction: 'up' | 'down') => {
@@ -372,33 +387,47 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       }
     >()
 
+    const addToMap = (ingredientName: string, quantity: number, unit: string) => {
+      const normalized = normalizeForAggregation(quantity, unit)
+      const key = `${ingredientName}__${normalized.unit}`
+      const existing = map.get(key)
+
+      if (existing) {
+        existing.quantity += normalized.value
+      } else {
+        map.set(key, {
+          ingredientName,
+          canonicalUnit: normalized.unit,
+          quantity: normalized.value,
+        })
+      }
+    }
+
     selectedRecipes.forEach((recipe) => {
       const target = Number(targets[recipe.id]) || 0
       const multiplier =
         target && recipe.base_servings ? target / recipe.base_servings : 1
 
       recipe.recipe_ingredients.forEach((ing) => {
-        const ingredient = Array.isArray(ing.ingredients)
-          ? ing.ingredients[0]
-          : ing.ingredients
-
+        const ingredient = getIngredient(ing)
         if (!ingredient) return
 
-        const scaledQty = ing.quantity * multiplier
-        const normalized = normalizeForAggregation(scaledQty, ing.unit)
-        const key = `${ingredient.name}__${normalized.unit}`
+        addToMap(ingredient.name, ing.quantity * multiplier, ing.unit)
+      })
 
-        const existing = map.get(key)
+      recipe.parent_sub_recipes?.forEach((link) => {
+        const linkedRecipe = getLinkedRecipe(link)
+        if (!linkedRecipe || !linkedRecipe.base_servings) return
 
-        if (existing) {
-          existing.quantity += normalized.value
-        } else {
-          map.set(key, {
-            ingredientName: ingredient.name,
-            canonicalUnit: normalized.unit,
-            quantity: normalized.value,
-          })
-        }
+        const neededAmount = link.quantity * multiplier
+        const linkedMultiplier = neededAmount / linkedRecipe.base_servings
+
+        linkedRecipe.recipe_ingredients?.forEach((ing) => {
+          const ingredient = getIngredient(ing)
+          if (!ingredient) return
+
+          addToMap(ingredient.name, ing.quantity * linkedMultiplier, ing.unit)
+        })
       })
     })
 
@@ -469,19 +498,52 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       rows.push(['Multiplier', formatNumber(multiplier)])
       rows.push([])
       rows.push(['Ingredients'])
-      rows.push(['Section', 'Ingredient', 'Quantity', 'Unit'])
+      rows.push(['Section', 'Ingredient', 'Quantity', 'Unit', 'Source'])
 
       recipe.recipe_ingredients.forEach((ing) => {
-        const ingredient = Array.isArray(ing.ingredients)
-          ? ing.ingredients[0]
-          : ing.ingredients
+        const ingredient = getIngredient(ing)
 
         rows.push([
           normalizeSectionName(ing.section_name),
           ingredient?.name || '',
           formatNumber(ing.quantity * multiplier),
           ing.unit,
+          'Ingredient',
         ])
+      })
+
+      recipe.parent_sub_recipes?.forEach((link) => {
+        const linkedRecipe = getLinkedRecipe(link)
+        if (!linkedRecipe) return
+
+        const neededAmount = link.quantity * multiplier
+        const linkedMultiplier =
+          linkedRecipe.base_servings > 0
+            ? neededAmount / linkedRecipe.base_servings
+            : 1
+
+        rows.push([])
+        rows.push([
+          'Linked Recipe',
+          linkedRecipe.name,
+          formatNumber(neededAmount),
+          link.unit,
+          normalizeSectionName(link.section_name),
+        ])
+
+        rows.push(['Section', 'Ingredient', 'Quantity', 'Unit', 'Source'])
+
+        linkedRecipe.recipe_ingredients?.forEach((ing) => {
+          const ingredient = getIngredient(ing)
+
+          rows.push([
+            normalizeSectionName(ing.section_name),
+            ingredient?.name || '',
+            formatNumber(ing.quantity * linkedMultiplier),
+            ing.unit,
+            `Linked: ${linkedRecipe.name}`,
+          ])
+        })
       })
 
       rows.push([])
@@ -505,6 +567,32 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           ])
         })
 
+      recipe.parent_sub_recipes?.forEach((link) => {
+        const linkedRecipe = getLinkedRecipe(link)
+        if (!linkedRecipe) return
+
+        rows.push([])
+        rows.push([`Linked Recipe Steps: ${linkedRecipe.name}`])
+        rows.push(['Section', 'Step Number', 'Instruction'])
+
+        linkedRecipe.recipe_steps
+          ?.slice()
+          .sort((a, b) => {
+            const sectionA = a.section_order ?? Number.MAX_SAFE_INTEGER
+            const sectionB = b.section_order ?? Number.MAX_SAFE_INTEGER
+
+            if (sectionA !== sectionB) return sectionA - sectionB
+            return a.step_number - b.step_number
+          })
+          .forEach((step) => {
+            rows.push([
+              normalizeSectionName(step.section_name),
+              step.step_number,
+              step.instruction,
+            ])
+          })
+      })
+
       if (recipe.notes) {
         rows.push([])
         rows.push(['Notes'])
@@ -517,7 +605,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         { wch: 34 },
         { wch: 14 },
         { wch: 14 },
-        { wch: 80 },
+        { wch: 28 },
       ]
 
       const sheetName = safeSheetName(`${recipeIndex + 1}. ${recipe.name}`)
@@ -1008,9 +1096,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                     <div className="space-y-1">
                       {items.map((ing) => {
                         const qty = ing.quantity * multiplier
-                        const ingredient = Array.isArray(ing.ingredients)
-                          ? ing.ingredients[0]
-                          : ing.ingredients
+                        const ingredient = getIngredient(ing)
 
                         return (
                           <div key={ing.id} className="text-sm">
@@ -1021,6 +1107,57 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                     </div>
                   </div>
                 ))}
+
+                {recipe.parent_sub_recipes &&
+                recipe.parent_sub_recipes.length > 0 ? (
+                  <div>
+                    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+                      Linked Recipes
+                    </div>
+
+                    <div className="space-y-4">
+                      {recipe.parent_sub_recipes.map((link) => {
+                        const linkedRecipe = getLinkedRecipe(link)
+                        if (!linkedRecipe) return null
+
+                        const neededAmount = link.quantity * multiplier
+                        const linkedMultiplier =
+                          linkedRecipe.base_servings > 0
+                            ? neededAmount / linkedRecipe.base_servings
+                            : 1
+
+                        return (
+                          <div key={link.id} className="rounded-xl border p-3">
+                            <div className="font-semibold">
+                              {linkedRecipe.name} — {formatNumber(neededAmount)}{' '}
+                              {link.unit}
+                            </div>
+
+                            <div className="mt-1 text-xs text-gray-500">
+                              Section: {normalizeSectionName(link.section_name)} / Base:{' '}
+                              {linkedRecipe.base_servings} / Multiplier: x
+                              {formatNumber(linkedMultiplier)}
+                            </div>
+
+                            <div className="mt-3 space-y-1">
+                              {linkedRecipe.recipe_ingredients?.map((ing) => {
+                                const ingredient = getIngredient(ing)
+                                const qty = ing.quantity * linkedMultiplier
+
+                                return (
+                                  <div key={ing.id} className="text-sm">
+                                    {ingredient?.name} — {formatNumber(qty)}{' '}
+                                    {ing.unit}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1047,6 +1184,57 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                 ) : (
                   <div className="text-sm text-gray-500">No steps.</div>
                 )}
+
+                {recipe.parent_sub_recipes &&
+                recipe.parent_sub_recipes.length > 0 ? (
+                  <div>
+                    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+                      Linked Recipe Steps
+                    </div>
+
+                    <div className="space-y-4">
+                      {recipe.parent_sub_recipes.map((link) => {
+                        const linkedRecipe = getLinkedRecipe(link)
+                        if (!linkedRecipe) return null
+
+                        const sortedSteps = linkedRecipe.recipe_steps
+                          ?.slice()
+                          .sort((a, b) => {
+                            const sectionA =
+                              a.section_order ?? Number.MAX_SAFE_INTEGER
+                            const sectionB =
+                              b.section_order ?? Number.MAX_SAFE_INTEGER
+
+                            if (sectionA !== sectionB) return sectionA - sectionB
+                            return a.step_number - b.step_number
+                          })
+
+                        return (
+                          <div key={link.id} className="rounded-xl border p-3">
+                            <div className="font-semibold">
+                              {linkedRecipe.name}
+                            </div>
+
+                            <div className="mt-2 space-y-2">
+                              {sortedSteps && sortedSteps.length > 0 ? (
+                                sortedSteps.map((step) => (
+                                  <div key={step.id} className="text-sm">
+                                    {normalizeSectionName(step.section_name)} /{' '}
+                                    {step.step_number}. {step.instruction}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-sm text-gray-500">
+                                  No steps.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1065,7 +1253,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       <div className="p-10 page-break">
         <h2 className="text-2xl font-bold">Aggregated Ingredient Totals</h2>
         <p className="mt-2 text-sm text-gray-600">
-          Combined totals for checked recipes only.
+          Combined totals for checked recipes only, including linked recipes.
         </p>
 
         <div className="mt-6">
