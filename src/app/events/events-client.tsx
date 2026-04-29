@@ -41,7 +41,7 @@ type Recipe = {
   base_servings: number
   usage_type: string | null
   recipe_ingredients: RecipeIngredientRow[]
-  recipe_sub_recipes?: RecipeSubRecipeRow[]
+  parent_sub_recipes?: RecipeSubRecipeRow[]
 }
 
 type EventBuilder = {
@@ -250,8 +250,12 @@ export default function EventsClient({ recipes }: Props) {
     const orderMap = new Map(recipeOrder.map((id, index) => [id, index]))
 
     return checkedRecipes.sort((a, b) => {
-      const aOrder = orderMap.has(a.id) ? orderMap.get(a.id)! : Number.MAX_SAFE_INTEGER
-      const bOrder = orderMap.has(b.id) ? orderMap.get(b.id)! : Number.MAX_SAFE_INTEGER
+      const aOrder = orderMap.has(a.id)
+        ? orderMap.get(a.id)!
+        : Number.MAX_SAFE_INTEGER
+      const bOrder = orderMap.has(b.id)
+        ? orderMap.get(b.id)!
+        : Number.MAX_SAFE_INTEGER
 
       if (aOrder !== bOrder) return aOrder - bOrder
 
@@ -535,7 +539,7 @@ export default function EventsClient({ recipes }: Props) {
         })
       })
 
-      recipe.recipe_sub_recipes?.forEach((linkedRow) => {
+      recipe.parent_sub_recipes?.forEach((linkedRow) => {
         const linkedRecipe = getLinkedRecipe(linkedRow)
 
         if (!linkedRecipe || !linkedRecipe.base_servings) return
@@ -554,7 +558,10 @@ export default function EventsClient({ recipes }: Props) {
           rows.push({
             recipeName: recipe.name,
             eventName: recipe.event_name || '',
-            sectionName: linkedRow.section_name || linkedIngredientRow.section_name || 'Other',
+            sectionName:
+              linkedRow.section_name ||
+              linkedIngredientRow.section_name ||
+              'Other',
             ingredientName: ingredient.name,
             quantity: converted.value,
             unit: converted.unit,
@@ -610,7 +617,7 @@ export default function EventsClient({ recipes }: Props) {
         addToMap(ingredient.name, scaledQuantity, row.unit)
       })
 
-      recipe.recipe_sub_recipes?.forEach((linkedRow) => {
+      recipe.parent_sub_recipes?.forEach((linkedRow) => {
         const linkedRecipe = getLinkedRecipe(linkedRow)
 
         if (!linkedRecipe || !linkedRecipe.base_servings) return

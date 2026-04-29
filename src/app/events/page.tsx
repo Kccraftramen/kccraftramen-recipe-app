@@ -25,7 +25,7 @@ export default async function EventsPage() {
           default_unit
         )
       ),
-      recipe_sub_recipes (
+      parent_sub_recipes:recipe_sub_recipes!recipe_sub_recipes_parent_recipe_id_fkey (
         id,
         quantity,
         unit,
