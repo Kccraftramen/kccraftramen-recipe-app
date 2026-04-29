@@ -702,6 +702,116 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
     ]
     XLSX.utils.book_append_sheet(workbook, coverSheet, 'Cover')
 
+        selectedRecipes.forEach((recipe, recipeIndex) => {
+      const target = Number(targets[recipe.id]) || 0
+
+      const multiplier =
+        target && recipe.base_servings
+          ? roundUpToHalf(target / recipe.base_servings)
+          : 1
+
+      const groupedIngredientsForExcel = recipe.recipe_ingredients.reduce(
+       (acc: Record<string, RecipeIngredient[]>, ing) => {
+         const section = normalizeSectionName(ing.section_name)
+          if (!acc[section]) acc[section] = []
+          acc[section].push(ing)
+          return acc
+        },
+        {}
+      )
+
+      const groupedLinkedRecipesForExcel = (recipe.parent_sub_recipes || []).reduce(
+        (acc: Record<string, RecipeSubRecipe[]>, link) => {
+          const section = normalizeSectionName(link.section_name)
+          if (!acc[section]) acc[section] = []
+          acc[section].push(link)
+          return acc
+        },
+        {}
+      )
+
+      const rows: (string | number)[][] = []
+
+      rows.push(['Recipe Name', recipe.name])
+      rows.push(['Category', recipe.category || '-'])
+      rows.push(['Author', recipe.author || '-'])
+      rows.push(['Usage Type', usageTypeLabel(recipe.usage_type)])
+      rows.push(['Event Name', recipe.event_name || '-'])
+      rows.push(['Base Servings', recipe.base_servings])
+      rows.push(['Target Servings', target || '-'])
+      rows.push(['Multiplier', formatNumber(multiplier)])
+
+      rows.push([])
+      rows.push(['Ingredients'])
+      rows.push(['Section', 'Name', 'Quantity', 'Unit'])
+
+      Object.entries(groupedIngredientsForExcel).forEach(([section, items]) => {
+        items.forEach((ing) => {
+          const ingredient = getIngredient(ing)
+
+          rows.push([
+            section,
+            ingredient?.name || '',
+            formatNumber(ing.quantity * multiplier),
+          ing.unit,
+          ])
+        })
+      })
+
+      Object.entries(groupedLinkedRecipesForExcel).forEach(([section, links]) => {
+        links.forEach((link) => {
+          const linkedRecipe = getLinkedRecipe(link)
+          if (!linkedRecipe) return
+
+          rows.push([
+            section,
+            linkedRecipe.name,
+            formatNumber(link.quantity * multiplier),
+            link.unit,
+          ])
+        })
+      })
+
+      rows.push([])
+      rows.push(['Steps'])
+      rows.push(['Section', 'Step Number', 'Instruction'])
+
+      recipe.recipe_steps
+        .slice()
+        .sort((a, b) => {
+          const sectionA = a.section_order ?? Number.MAX_SAFE_INTEGER
+          const sectionB = b.section_order ?? Number.MAX_SAFE_INTEGER
+
+          if (sectionA !== sectionB) return sectionA - sectionB
+          return a.step_number - b.step_number
+        })
+        .forEach((step) => {
+          rows.push([
+            normalizeSectionName(step.section_name),
+            step.step_number,
+            step.instruction,
+          ])
+        })
+
+      if (recipe.notes) {
+        rows.push([])
+        rows.push(['Notes'])
+        rows.push([recipe.notes])
+      }
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows)
+      worksheet['!cols'] = [
+        { wch: 22 },
+        { wch: 34 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 80 },
+      ]
+
+      const sheetName = safeSheetName(`${recipeIndex + 1}. ${recipe.name}`)
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    })
+
       linkedRecipePages.forEach((page, index) => {
       const rows: (string | number)[][] = []
 
