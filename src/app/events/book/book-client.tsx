@@ -1463,24 +1463,24 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                 ))}
               </div>
              {page.linkedRecipesUsed.length > 0 ? (
-  <div className="mt-5 space-y-5">
-    {Object.entries(groupedLinkedRecipesUsed).map(([section, links]) => (
-      <div key={section}>
-        <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
-          {section}
-        </div>
+               <div className="mt-5 space-y-5">
+                {Object.entries(groupedLinkedRecipesUsed).map(([section, links]) => (
+                  <div key={section}>
+                   <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+                     {section}
+                   </div>
 
-        <div className="space-y-1">
-          {links.map((link, index) => (
-            <div key={`${link.name}-${index}`} className="text-sm">
-              {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}
-            </div>
-          ))}
-        </div>
-      </div>
-    ))}
-  </div>
-) : null}
+                  <div className="space-y-1">
+                    {links.map((link, index) => (
+                      <div key={`${link.name}-${index}`} className="text-sm">
+                        {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}
+                      </div>
+                    ))}
+                 </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
             </div>
 
             <div className="mt-8">
