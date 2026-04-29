@@ -87,6 +87,9 @@ function formatNumber(value: number) {
   if (Number.isInteger(value)) return value.toString()
   return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
 }
+function roundUpToHalf(value: number) {
+  return Math.ceil(value * 2) / 2
+}
 
 function normalizeSectionName(value: string | null) {
   return value?.trim() || 'Other'
@@ -415,10 +418,12 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           displayRequired,
           multiplier:
             item.linkedRecipe.base_servings > 0
-              ? item.totalRequiredCanonical / item.linkedRecipe.base_servings
-              : 1,
-          usedBy: item.usedBy,
-        }
+            ? roundUpToHalf(
+           item.totalRequiredCanonical / item.linkedRecipe.base_servings
+           )
+          : 1,
+         usedBy: item.usedBy,
+          }
       })
       .sort((a, b) => a.linkedRecipe.name.localeCompare(b.linkedRecipe.name))
   }, [selectedRecipes, targets])
