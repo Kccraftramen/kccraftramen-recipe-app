@@ -1396,7 +1396,15 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           },
           {}
         )
-
+        const groupedLinkedRecipesUsed = page.linkedRecipesUsed.reduce(
+  (acc: Record<string, typeof page.linkedRecipesUsed>, link) => {
+    const section = normalizeSectionName(link.sectionName)
+    if (!acc[section]) acc[section] = []
+    acc[section].push(link)
+    return acc
+  },
+  {}
+)
         const groupedSteps = groupSteps(page.linkedRecipe.recipe_steps)
 
         return (
@@ -1454,21 +1462,23 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                   </div>
                 ))}
               </div>
-              {page.linkedRecipesUsed.length > 0 ? (
-  <div className="mt-5">
-    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
-      Linked Recipes
-    </div>
-
-    <div className="space-y-1">
-      {page.linkedRecipesUsed.map((link, index) => (
-        <div key={`${link.name}-${index}`} className="text-sm">
-          {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}
-          {' / Section: '}
-          {link.sectionName}
+             {page.linkedRecipesUsed.length > 0 ? (
+  <div className="mt-5 space-y-5">
+    {Object.entries(groupedLinkedRecipesUsed).map(([section, links]) => (
+      <div key={section}>
+        <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+          {section}
         </div>
-      ))}
-    </div>
+
+        <div className="space-y-1">
+          {links.map((link, index) => (
+            <div key={`${link.name}-${index}`} className="text-sm">
+              {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
   </div>
 ) : null}
             </div>
