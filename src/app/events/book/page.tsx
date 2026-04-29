@@ -1,8 +1,8 @@
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 import { supabase } from '../../lib/supabase'
 import BookClient from './book-client'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function BookPage() {
   const { data: recipes, error } = await supabase
