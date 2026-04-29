@@ -87,6 +87,7 @@ function formatNumber(value: number) {
   if (Number.isInteger(value)) return value.toString()
   return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
 }
+
 function roundUpToHalf(value: number) {
   return Math.ceil(value * 2) / 2
 }
@@ -366,7 +367,9 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
     selectedRecipes.forEach((recipe) => {
       const target = Number(targets[recipe.id]) || 0
       const parentMultiplier =
-        target && recipe.base_servings ? target / recipe.base_servings : 1
+        target && recipe.base_servings
+          ? roundUpToHalf(target / recipe.base_servings)
+          : 1
 
       recipe.parent_sub_recipes?.forEach((link) => {
         const linkedRecipe = getLinkedRecipe(link)
@@ -418,12 +421,12 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           displayRequired,
           multiplier:
             item.linkedRecipe.base_servings > 0
-            ? roundUpToHalf(
-           item.totalRequiredCanonical / item.linkedRecipe.base_servings
-           )
-          : 1,
-         usedBy: item.usedBy,
-          }
+              ? roundUpToHalf(
+                  item.totalRequiredCanonical / item.linkedRecipe.base_servings
+                )
+              : 1,
+          usedBy: item.usedBy,
+        }
       })
       .sort((a, b) => a.linkedRecipe.name.localeCompare(b.linkedRecipe.name))
   }, [selectedRecipes, targets])
@@ -458,8 +461,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       const target = Number(targets[recipe.id]) || 0
       const multiplier =
         target && recipe.base_servings
-       ? roundUpToHalf(target / recipe.base_servings)
-        : 1
+          ? roundUpToHalf(target / recipe.base_servings)
+          : 1
 
       recipe.recipe_ingredients.forEach((ing) => {
         const ingredient = getIngredient(ing)
@@ -634,8 +637,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       const target = Number(targets[recipe.id]) || 0
       const multiplier =
         target && recipe.base_servings
-       ? roundUpToHalf(target / recipe.base_servings)
-        : 1
+          ? roundUpToHalf(target / recipe.base_servings)
+          : 1
 
       const rows: (string | number)[][] = []
 
@@ -1048,7 +1051,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                   const target = Number(targets[recipe.id])
                   const multiplier =
                     target && recipe.base_servings
-                      ? target / recipe.base_servings
+                      ? roundUpToHalf(target / recipe.base_servings)
                       : 1
 
                   return (
@@ -1193,7 +1196,9 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       {selectedRecipes.map((recipe) => {
         const target = Number(targets[recipe.id]) || 0
         const multiplier =
-          target && recipe.base_servings ? target / recipe.base_servings : 1
+          target && recipe.base_servings
+            ? roundUpToHalf(target / recipe.base_servings)
+            : 1
 
         const groupedIngredients = recipe.recipe_ingredients.reduce(
           (acc: Record<string, RecipeIngredient[]>, ing) => {
