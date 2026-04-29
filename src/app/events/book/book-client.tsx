@@ -66,6 +66,23 @@ type EventBuilder = {
   recipe_order: string[] | null
 }
 
+type LinkedRecipeBookPage = {
+  linkedRecipe: LinkedRecipeInfo
+  canonicalUnit: string
+  totalRequiredCanonical: number
+  displayRequired: {
+    value: number
+    unit: string
+  }
+  multiplier: number
+  usedBy: {
+    parentRecipeName: string
+    requiredQuantity: number
+    unit: string
+    sectionName: string
+  }[]
+}
+
 function formatNumber(value: number) {
   if (Number.isInteger(value)) return value.toString()
   return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
@@ -122,6 +139,52 @@ function getIngredient(row: RecipeIngredient) {
 
 function getLinkedRecipe(row: RecipeSubRecipe) {
   return Array.isArray(row.sub_recipe) ? row.sub_recipe[0] : row.sub_recipe
+}
+
+function groupSteps(steps: RecipeStep[]) {
+  const groups = new Map<
+    string,
+    {
+      section: string
+      sectionOrder: number
+      steps: RecipeStep[]
+    }
+  >()
+
+  steps.forEach((step) => {
+    const section = normalizeSectionName(step.section_name)
+    const sectionOrder =
+      step.section_order === null || step.section_order === undefined
+        ? Number.MAX_SAFE_INTEGER
+        : step.section_order
+
+    const existing = groups.get(section)
+
+    if (existing) {
+      existing.steps.push(step)
+      if (sectionOrder < existing.sectionOrder) {
+        existing.sectionOrder = sectionOrder
+      }
+    } else {
+      groups.set(section, {
+        section,
+        sectionOrder,
+        steps: [step],
+      })
+    }
+  })
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      steps: group.steps.sort((a, b) => a.step_number - b.step_number),
+    }))
+    .sort((a, b) => {
+      if (a.sectionOrder !== b.sectionOrder) {
+        return a.sectionOrder - b.sectionOrder
+      }
+      return a.section.localeCompare(b.section)
+    })
 }
 
 export default function BookClient({ recipes }: { recipes: Recipe[] }) {
@@ -286,6 +349,141 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         ? 'Custom Event'
         : 'Event Recipe Book')
 
+  const linkedRecipePages = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        linkedRecipe: LinkedRecipeInfo
+        canonicalUnit: string
+        totalRequiredCanonical: number
+        usedBy: LinkedRecipeBookPage['usedBy']
+      }
+    >()
+
+    selectedRecipes.forEach((recipe) => {
+      const target = Number(targets[recipe.id]) || 0
+      const parentMultiplier =
+        target && recipe.base_servings ? target / recipe.base_servings : 1
+
+      recipe.parent_sub_recipes?.forEach((link) => {
+        const linkedRecipe = getLinkedRecipe(link)
+        if (!linkedRecipe) return
+
+        const requiredQuantity = link.quantity * parentMultiplier
+        const normalized = normalizeForAggregation(requiredQuantity, link.unit)
+
+        const key = `${linkedRecipe.id}__${normalized.unit}`
+        const existing = map.get(key)
+
+        if (existing) {
+          existing.totalRequiredCanonical += normalized.value
+          existing.usedBy.push({
+            parentRecipeName: recipe.name,
+            requiredQuantity,
+            unit: link.unit,
+            sectionName: normalizeSectionName(link.section_name),
+          })
+        } else {
+          map.set(key, {
+            linkedRecipe,
+            canonicalUnit: normalized.unit,
+            totalRequiredCanonical: normalized.value,
+            usedBy: [
+              {
+                parentRecipeName: recipe.name,
+                requiredQuantity,
+                unit: link.unit,
+                sectionName: normalizeSectionName(link.section_name),
+              },
+            ],
+          })
+        }
+      })
+    })
+
+    return Array.from(map.values())
+      .map((item) => {
+        const displayRequired = displayNormalizedUnit(
+          item.totalRequiredCanonical,
+          item.canonicalUnit
+        )
+
+        return {
+          linkedRecipe: item.linkedRecipe,
+          canonicalUnit: item.canonicalUnit,
+          totalRequiredCanonical: item.totalRequiredCanonical,
+          displayRequired,
+          multiplier:
+            item.linkedRecipe.base_servings > 0
+              ? item.totalRequiredCanonical / item.linkedRecipe.base_servings
+              : 1,
+          usedBy: item.usedBy,
+        }
+      })
+      .sort((a, b) => a.linkedRecipe.name.localeCompare(b.linkedRecipe.name))
+  }, [selectedRecipes, targets])
+
+  const aggregatedRows = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        ingredientName: string
+        canonicalUnit: string
+        quantity: number
+      }
+    >()
+
+    const addToMap = (ingredientName: string, quantity: number, unit: string) => {
+      const normalized = normalizeForAggregation(quantity, unit)
+      const key = `${ingredientName}__${normalized.unit}`
+      const existing = map.get(key)
+
+      if (existing) {
+        existing.quantity += normalized.value
+      } else {
+        map.set(key, {
+          ingredientName,
+          canonicalUnit: normalized.unit,
+          quantity: normalized.value,
+        })
+      }
+    }
+
+    selectedRecipes.forEach((recipe) => {
+      const target = Number(targets[recipe.id]) || 0
+      const multiplier =
+        target && recipe.base_servings ? target / recipe.base_servings : 1
+
+      recipe.recipe_ingredients.forEach((ing) => {
+        const ingredient = getIngredient(ing)
+        if (!ingredient) return
+
+        addToMap(ingredient.name, ing.quantity * multiplier, ing.unit)
+      })
+    })
+
+    linkedRecipePages.forEach((page) => {
+      page.linkedRecipe.recipe_ingredients.forEach((ing) => {
+        const ingredient = getIngredient(ing)
+        if (!ingredient) return
+
+        addToMap(ingredient.name, ing.quantity * page.multiplier, ing.unit)
+      })
+    })
+
+    return Array.from(map.values())
+      .map((row) => {
+        const display = displayNormalizedUnit(row.quantity, row.canonicalUnit)
+
+        return {
+          ingredientName: row.ingredientName,
+          quantity: display.value,
+          unit: display.unit,
+        }
+      })
+      .sort((a, b) => a.ingredientName.localeCompare(b.ingredientName))
+  }, [selectedRecipes, targets, linkedRecipePages])
+
   const handleEventToggle = (eventName: string, checked: boolean) => {
     if (checked) {
       setSelectedEvents((prev) =>
@@ -377,73 +575,6 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
     window.print()
   }
 
-  const aggregatedRows = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        ingredientName: string
-        canonicalUnit: string
-        quantity: number
-      }
-    >()
-
-    const addToMap = (ingredientName: string, quantity: number, unit: string) => {
-      const normalized = normalizeForAggregation(quantity, unit)
-      const key = `${ingredientName}__${normalized.unit}`
-      const existing = map.get(key)
-
-      if (existing) {
-        existing.quantity += normalized.value
-      } else {
-        map.set(key, {
-          ingredientName,
-          canonicalUnit: normalized.unit,
-          quantity: normalized.value,
-        })
-      }
-    }
-
-    selectedRecipes.forEach((recipe) => {
-      const target = Number(targets[recipe.id]) || 0
-      const multiplier =
-        target && recipe.base_servings ? target / recipe.base_servings : 1
-
-      recipe.recipe_ingredients.forEach((ing) => {
-        const ingredient = getIngredient(ing)
-        if (!ingredient) return
-
-        addToMap(ingredient.name, ing.quantity * multiplier, ing.unit)
-      })
-
-      recipe.parent_sub_recipes?.forEach((link) => {
-        const linkedRecipe = getLinkedRecipe(link)
-        if (!linkedRecipe || !linkedRecipe.base_servings) return
-
-        const neededAmount = link.quantity * multiplier
-        const linkedMultiplier = neededAmount / linkedRecipe.base_servings
-
-        linkedRecipe.recipe_ingredients?.forEach((ing) => {
-          const ingredient = getIngredient(ing)
-          if (!ingredient) return
-
-          addToMap(ingredient.name, ing.quantity * linkedMultiplier, ing.unit)
-        })
-      })
-    })
-
-    return Array.from(map.values())
-      .map((row) => {
-        const display = displayNormalizedUnit(row.quantity, row.canonicalUnit)
-
-        return {
-          ingredientName: row.ingredientName,
-          quantity: display.value,
-          unit: display.unit,
-        }
-      })
-      .sort((a, b) => a.ingredientName.localeCompare(b.ingredientName))
-  }, [selectedRecipes, targets])
-
   const handleDownloadExcel = () => {
     if (!selectedRecipes.length) {
       alert('Please select at least one recipe.')
@@ -457,10 +588,11 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       ['Event Recipe Book'],
       [],
       ['Book Title', bookTitle],
-      ['Included Recipes', selectedRecipes.length],
+      ['Parent Recipes', selectedRecipes.length],
+      ['Linked Recipes', linkedRecipePages.length],
       ['Generated At', new Date().toLocaleString()],
       [],
-      ['Recipe Order'],
+      ['Parent Recipe Order'],
       ['#', 'Recipe', 'Event', 'Category', 'Target Servings'],
       ...selectedRecipes.map((recipe, index) => [
         index + 1,
@@ -468,6 +600,16 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         recipe.event_name || '-',
         recipe.category || '-',
         targets[recipe.id] || '-',
+      ]),
+      [],
+      ['Linked Recipes'],
+      ['#', 'Linked Recipe', 'Total Required', 'Unit', 'Multiplier'],
+      ...linkedRecipePages.map((page, index) => [
+        index + 1,
+        page.linkedRecipe.name,
+        formatNumber(page.displayRequired.value),
+        page.displayRequired.unit,
+        formatNumber(page.multiplier),
       ]),
     ]
 
@@ -498,7 +640,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       rows.push(['Multiplier', formatNumber(multiplier)])
       rows.push([])
       rows.push(['Ingredients'])
-      rows.push(['Section', 'Ingredient', 'Quantity', 'Unit', 'Source'])
+      rows.push(['Section', 'Ingredient', 'Quantity', 'Unit'])
 
       recipe.recipe_ingredients.forEach((ing) => {
         const ingredient = getIngredient(ing)
@@ -508,43 +650,26 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           ingredient?.name || '',
           formatNumber(ing.quantity * multiplier),
           ing.unit,
-          'Ingredient',
         ])
       })
 
-      recipe.parent_sub_recipes?.forEach((link) => {
-        const linkedRecipe = getLinkedRecipe(link)
-        if (!linkedRecipe) return
-
-        const neededAmount = link.quantity * multiplier
-        const linkedMultiplier =
-          linkedRecipe.base_servings > 0
-            ? neededAmount / linkedRecipe.base_servings
-            : 1
-
+      if (recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0) {
         rows.push([])
-        rows.push([
-          'Linked Recipe',
-          linkedRecipe.name,
-          formatNumber(neededAmount),
-          link.unit,
-          normalizeSectionName(link.section_name),
-        ])
+        rows.push(['Linked Recipes Used'])
+        rows.push(['Linked Recipe', 'Required Quantity', 'Unit', 'Section'])
 
-        rows.push(['Section', 'Ingredient', 'Quantity', 'Unit', 'Source'])
-
-        linkedRecipe.recipe_ingredients?.forEach((ing) => {
-          const ingredient = getIngredient(ing)
+        recipe.parent_sub_recipes.forEach((link) => {
+          const linkedRecipe = getLinkedRecipe(link)
+          if (!linkedRecipe) return
 
           rows.push([
-            normalizeSectionName(ing.section_name),
-            ingredient?.name || '',
-            formatNumber(ing.quantity * linkedMultiplier),
-            ing.unit,
-            `Linked: ${linkedRecipe.name}`,
+            linkedRecipe.name,
+            formatNumber(link.quantity * multiplier),
+            link.unit,
+            normalizeSectionName(link.section_name),
           ])
         })
-      })
+      }
 
       rows.push([])
       rows.push(['Steps'])
@@ -567,32 +692,6 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           ])
         })
 
-      recipe.parent_sub_recipes?.forEach((link) => {
-        const linkedRecipe = getLinkedRecipe(link)
-        if (!linkedRecipe) return
-
-        rows.push([])
-        rows.push([`Linked Recipe Steps: ${linkedRecipe.name}`])
-        rows.push(['Section', 'Step Number', 'Instruction'])
-
-        linkedRecipe.recipe_steps
-          ?.slice()
-          .sort((a, b) => {
-            const sectionA = a.section_order ?? Number.MAX_SAFE_INTEGER
-            const sectionB = b.section_order ?? Number.MAX_SAFE_INTEGER
-
-            if (sectionA !== sectionB) return sectionA - sectionB
-            return a.step_number - b.step_number
-          })
-          .forEach((step) => {
-            rows.push([
-              normalizeSectionName(step.section_name),
-              step.step_number,
-              step.instruction,
-            ])
-          })
-      })
-
       if (recipe.notes) {
         rows.push([])
         rows.push(['Notes'])
@@ -605,10 +704,85 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         { wch: 34 },
         { wch: 14 },
         { wch: 14 },
-        { wch: 28 },
+        { wch: 80 },
       ]
 
       const sheetName = safeSheetName(`${recipeIndex + 1}. ${recipe.name}`)
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    })
+
+    linkedRecipePages.forEach((page, index) => {
+      const rows: (string | number)[][] = []
+
+      rows.push(['Linked Recipe Name', page.linkedRecipe.name])
+      rows.push([
+        'Total Required',
+        formatNumber(page.displayRequired.value),
+        page.displayRequired.unit,
+      ])
+      rows.push(['Base Servings', page.linkedRecipe.base_servings])
+      rows.push(['Multiplier', formatNumber(page.multiplier)])
+      rows.push([])
+      rows.push(['Used By'])
+      rows.push(['Parent Recipe', 'Required Quantity', 'Unit', 'Section'])
+
+      page.usedBy.forEach((usage) => {
+        rows.push([
+          usage.parentRecipeName,
+          formatNumber(usage.requiredQuantity),
+          usage.unit,
+          usage.sectionName,
+        ])
+      })
+
+      rows.push([])
+      rows.push(['Ingredients'])
+      rows.push(['Section', 'Ingredient', 'Quantity', 'Unit'])
+
+      page.linkedRecipe.recipe_ingredients.forEach((ing) => {
+        const ingredient = getIngredient(ing)
+
+        rows.push([
+          normalizeSectionName(ing.section_name),
+          ingredient?.name || '',
+          formatNumber(ing.quantity * page.multiplier),
+          ing.unit,
+        ])
+      })
+
+      rows.push([])
+      rows.push(['Steps'])
+      rows.push(['Section', 'Step Number', 'Instruction'])
+
+      page.linkedRecipe.recipe_steps
+        .slice()
+        .sort((a, b) => {
+          const sectionA = a.section_order ?? Number.MAX_SAFE_INTEGER
+          const sectionB = b.section_order ?? Number.MAX_SAFE_INTEGER
+
+          if (sectionA !== sectionB) return sectionA - sectionB
+          return a.step_number - b.step_number
+        })
+        .forEach((step) => {
+          rows.push([
+            normalizeSectionName(step.section_name),
+            step.step_number,
+            step.instruction,
+          ])
+        })
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows)
+      worksheet['!cols'] = [
+        { wch: 24 },
+        { wch: 36 },
+        { wch: 16 },
+        { wch: 16 },
+        { wch: 80 },
+      ]
+
+      const sheetName = safeSheetName(
+        `${selectedRecipes.length + index + 1}. ${page.linkedRecipe.name}`
+      )
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
     })
 
@@ -651,7 +825,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
             <h1 className="text-2xl font-bold">Event Recipe Book</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Load from Event Builder or manually select recipes. PDF and Excel use checked recipes in saved order.
+              Linked recipes are shown as separate recipe pages with combined required quantities.
             </p>
             {isLoadingBuilder ? (
               <p className="mt-2 text-sm text-gray-500">Loading builder...</p>
@@ -690,7 +864,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                 <div className="font-semibold">Current Book</div>
                 <div className="mt-1">{bookTitle}</div>
                 <div className="mt-1 text-xs text-gray-500">
-                  Included Recipes: {selectedRecipes.length}
+                  Parent Recipes: {selectedRecipes.length} / Linked Recipes:{' '}
+                  {linkedRecipePages.length}
                 </div>
               </div>
 
@@ -949,7 +1124,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
             Recipe Order
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            This order is used for the printed recipe book and Excel tabs.
+            This order is used for parent recipes. Linked recipes are automatically added after parent recipes.
           </p>
 
           <div className="mt-4 space-y-3">
@@ -1001,7 +1176,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
         <h1 className="text-4xl font-bold">{bookTitle}</h1>
         <p className="mt-4 text-lg">Recipe Book</p>
         <p className="mt-3 text-sm text-gray-600">
-          Included Recipes: {selectedRecipes.length}
+          Parent Recipes: {selectedRecipes.length} / Linked Recipes:{' '}
+          {linkedRecipePages.length}
         </p>
       </div>
 
@@ -1020,51 +1196,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           {}
         )
 
-        const groupedSteps = (() => {
-          const groups = new Map<
-            string,
-            {
-              section: string
-              sectionOrder: number
-              steps: RecipeStep[]
-            }
-          >()
-
-          recipe.recipe_steps.forEach((step) => {
-            const section = normalizeSectionName(step.section_name)
-            const sectionOrder =
-              step.section_order === null || step.section_order === undefined
-                ? Number.MAX_SAFE_INTEGER
-                : step.section_order
-
-            const existing = groups.get(section)
-
-            if (existing) {
-              existing.steps.push(step)
-              if (sectionOrder < existing.sectionOrder) {
-                existing.sectionOrder = sectionOrder
-              }
-            } else {
-              groups.set(section, {
-                section,
-                sectionOrder,
-                steps: [step],
-              })
-            }
-          })
-
-          return Array.from(groups.values())
-            .map((group) => ({
-              ...group,
-              steps: group.steps.sort((a, b) => a.step_number - b.step_number),
-            }))
-            .sort((a, b) => {
-              if (a.sectionOrder !== b.sectionOrder) {
-                return a.sectionOrder - b.sectionOrder
-              }
-              return a.section.localeCompare(b.section)
-            })
-        })()
+        const groupedSteps = groupSteps(recipe.recipe_steps)
 
         return (
           <div key={recipe.id} className="p-10 page-break">
@@ -1107,57 +1239,138 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                     </div>
                   </div>
                 ))}
+              </div>
 
-                {recipe.parent_sub_recipes &&
-                recipe.parent_sub_recipes.length > 0 ? (
-                  <div>
+              {recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0 ? (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-600">
+                    Linked Recipes Used
+                  </h4>
+
+                  <div className="mt-2 space-y-1 text-sm">
+                    {recipe.parent_sub_recipes.map((link) => {
+                      const linkedRecipe = getLinkedRecipe(link)
+                      if (!linkedRecipe) return null
+
+                      return (
+                        <div key={link.id}>
+                          {linkedRecipe.name} —{' '}
+                          {formatNumber(link.quantity * multiplier)} {link.unit}
+                          {' / Section: '}
+                          {normalizeSectionName(link.section_name)}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-8">
+              <h3 className="text-lg font-bold">Steps</h3>
+
+              <div className="mt-3 space-y-5">
+                {groupedSteps.length ? (
+                  groupedSteps.map((group) => (
+                    <div key={group.section}>
+                      <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+                        {group.section}
+                      </div>
+
+                      <div className="space-y-2">
+                        {group.steps.map((step) => (
+                          <div key={step.id} className="text-sm">
+                            {step.step_number}. {step.instruction}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No steps.</div>
+                )}
+              </div>
+            </div>
+
+            {recipe.notes ? (
+              <div className="mt-8">
+                <h3 className="text-lg font-bold">Notes</h3>
+                <div className="mt-2 whitespace-pre-wrap text-sm">
+                  {recipe.notes}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )
+      })}
+
+      {linkedRecipePages.map((page) => {
+        const groupedIngredients = page.linkedRecipe.recipe_ingredients.reduce(
+          (acc: Record<string, RecipeIngredient[]>, ing) => {
+            const section = normalizeSectionName(ing.section_name)
+            if (!acc[section]) acc[section] = []
+            acc[section].push(ing)
+            return acc
+          },
+          {}
+        )
+
+        const groupedSteps = groupSteps(page.linkedRecipe.recipe_steps)
+
+        return (
+          <div key={`${page.linkedRecipe.id}-${page.canonicalUnit}`} className="p-10 page-break">
+            <div>
+              <h2 className="text-2xl font-bold">{page.linkedRecipe.name}</h2>
+              <div className="mt-2 space-y-1 text-sm">
+                <div>Type: Linked Recipe</div>
+                <div>
+                  Total Required: {formatNumber(page.displayRequired.value)}{' '}
+                  {page.displayRequired.unit}
+                </div>
+                <div>Base Servings: {page.linkedRecipe.base_servings}</div>
+                <div>Multiplier: x{formatNumber(page.multiplier)}</div>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <h3 className="text-lg font-bold">Used By</h3>
+
+              <div className="mt-3 space-y-1 text-sm">
+                {page.usedBy.map((usage, index) => (
+                  <div key={`${usage.parentRecipeName}-${index}`}>
+                    {usage.parentRecipeName} —{' '}
+                    {formatNumber(usage.requiredQuantity)} {usage.unit}
+                    {' / Section: '}
+                    {usage.sectionName}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <h3 className="text-lg font-bold">Ingredients</h3>
+
+              <div className="mt-3 space-y-5">
+                {Object.entries(groupedIngredients).map(([section, items]) => (
+                  <div key={section}>
                     <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
-                      Linked Recipes
+                      {section}
                     </div>
 
-                    <div className="space-y-4">
-                      {recipe.parent_sub_recipes.map((link) => {
-                        const linkedRecipe = getLinkedRecipe(link)
-                        if (!linkedRecipe) return null
-
-                        const neededAmount = link.quantity * multiplier
-                        const linkedMultiplier =
-                          linkedRecipe.base_servings > 0
-                            ? neededAmount / linkedRecipe.base_servings
-                            : 1
+                    <div className="space-y-1">
+                      {items.map((ing) => {
+                        const qty = ing.quantity * page.multiplier
+                        const ingredient = getIngredient(ing)
 
                         return (
-                          <div key={link.id} className="rounded-xl border p-3">
-                            <div className="font-semibold">
-                              {linkedRecipe.name} — {formatNumber(neededAmount)}{' '}
-                              {link.unit}
-                            </div>
-
-                            <div className="mt-1 text-xs text-gray-500">
-                              Section: {normalizeSectionName(link.section_name)} / Base:{' '}
-                              {linkedRecipe.base_servings} / Multiplier: x
-                              {formatNumber(linkedMultiplier)}
-                            </div>
-
-                            <div className="mt-3 space-y-1">
-                              {linkedRecipe.recipe_ingredients?.map((ing) => {
-                                const ingredient = getIngredient(ing)
-                                const qty = ing.quantity * linkedMultiplier
-
-                                return (
-                                  <div key={ing.id} className="text-sm">
-                                    {ingredient?.name} — {formatNumber(qty)}{' '}
-                                    {ing.unit}
-                                  </div>
-                                )
-                              })}
-                            </div>
+                          <div key={ing.id} className="text-sm">
+                            {ingredient?.name} — {formatNumber(qty)} {ing.unit}
                           </div>
                         )
                       })}
                     </div>
                   </div>
-                ) : null}
+                ))}
               </div>
             </div>
 
@@ -1184,68 +1397,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                 ) : (
                   <div className="text-sm text-gray-500">No steps.</div>
                 )}
-
-                {recipe.parent_sub_recipes &&
-                recipe.parent_sub_recipes.length > 0 ? (
-                  <div>
-                    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
-                      Linked Recipe Steps
-                    </div>
-
-                    <div className="space-y-4">
-                      {recipe.parent_sub_recipes.map((link) => {
-                        const linkedRecipe = getLinkedRecipe(link)
-                        if (!linkedRecipe) return null
-
-                        const sortedSteps = linkedRecipe.recipe_steps
-                          ?.slice()
-                          .sort((a, b) => {
-                            const sectionA =
-                              a.section_order ?? Number.MAX_SAFE_INTEGER
-                            const sectionB =
-                              b.section_order ?? Number.MAX_SAFE_INTEGER
-
-                            if (sectionA !== sectionB) return sectionA - sectionB
-                            return a.step_number - b.step_number
-                          })
-
-                        return (
-                          <div key={link.id} className="rounded-xl border p-3">
-                            <div className="font-semibold">
-                              {linkedRecipe.name}
-                            </div>
-
-                            <div className="mt-2 space-y-2">
-                              {sortedSteps && sortedSteps.length > 0 ? (
-                                sortedSteps.map((step) => (
-                                  <div key={step.id} className="text-sm">
-                                    {normalizeSectionName(step.section_name)} /{' '}
-                                    {step.step_number}. {step.instruction}
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="text-sm text-gray-500">
-                                  No steps.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : null}
               </div>
             </div>
-
-            {recipe.notes ? (
-              <div className="mt-8">
-                <h3 className="text-lg font-bold">Notes</h3>
-                <div className="mt-2 whitespace-pre-wrap text-sm">
-                  {recipe.notes}
-                </div>
-              </div>
-            ) : null}
           </div>
         )
       })}
@@ -1253,7 +1406,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       <div className="p-10 page-break">
         <h2 className="text-2xl font-bold">Aggregated Ingredient Totals</h2>
         <p className="mt-2 text-sm text-gray-600">
-          Combined totals for checked recipes only, including linked recipes.
+          Combined totals for checked parent recipes and linked recipes.
         </p>
 
         <div className="mt-6">
