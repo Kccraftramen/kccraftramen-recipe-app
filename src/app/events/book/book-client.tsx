@@ -782,7 +782,9 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       )
 
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
-    })}
+    })
+       XLSX.writeFile(workbook, `${safeSheetName(bookTitle)}.xlsx`)
+      }
   
   return (
     <div className="bg-white text-black print:bg-white">
