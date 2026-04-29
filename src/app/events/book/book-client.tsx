@@ -1280,6 +1280,16 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
         const groupedSteps = groupSteps(recipe.recipe_steps)
 
+        const groupedParentLinkedRecipes = (recipe.parent_sub_recipes || []).reduce(
+        (acc: Record<string, RecipeSubRecipe[]>, link) => {
+          const section = normalizeSectionName(link.section_name)
+          if (!acc[section]) acc[section] = []
+          acc[section].push(link)
+         return acc
+        },
+       {}
+      )
+
         return (
           <div key={recipe.id} className="p-10 page-break">
             <div>
@@ -1408,16 +1418,6 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
   {}
 )
         const groupedSteps = groupSteps(page.linkedRecipe.recipe_steps)
-
-        const groupedParentLinkedRecipes = (recipe.parent_sub_recipes || []).reduce(
-  (acc: Record<string, RecipeSubRecipe[]>, link) => {
-    const section = normalizeSectionName(link.section_name)
-    if (!acc[section]) acc[section] = []
-    acc[section].push(link)
-    return acc
-  },
-  {}
-)
 
         return (
           <div key={`${page.linkedRecipe.id}-${page.canonicalUnit}`} className="p-10 page-break">
