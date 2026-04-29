@@ -1311,26 +1311,28 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
               </div>
 
               {recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0 ? (
-                <div className="mt-5">
-                <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
-                 Linked Recipes
-                 </div>
+  <div className="mt-5">
+    <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      Linked Recipes
+    </div>
 
-                 <div className="space-y-1">
-                 {recipe.parent_sub_recipes.map((link) => {
-                const linkedRecipe = getLinkedRecipe(link)
-                   if (!linkedRecipe) return null
+    <div className="space-y-1">
+      {recipe.parent_sub_recipes.map((link) => {
+        const linkedRecipe = getLinkedRecipe(link)
+        if (!linkedRecipe) return null
 
-                   return (
-                   <div key={link.id} className="text-sm">
-                    {linkedRecipe.name} — {formatNumber(link.quantity * multiplier)}{' '}
-                    {link.unit}
-                   </div>
-                    )
-                     })}
-                   </div>
-                    </div>
-                ) : null}
+        return (
+          <div key={link.id} className="text-sm">
+            {linkedRecipe.name} — {formatNumber(link.quantity * multiplier)}{' '}
+            {link.unit}
+            {' / Section: '}
+            {normalizeSectionName(link.section_name)}
+          </div>
+        )
+      })}
+    </div>
+  </div>
+) : null}
                  </div>
 
             <div className="mt-8">
