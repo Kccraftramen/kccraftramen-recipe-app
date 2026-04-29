@@ -734,22 +734,22 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
       })
 
       if (recipe.parent_sub_recipes && recipe.parent_sub_recipes.length > 0) {
-        rows.push([])
-        rows.push(['Linked Recipes Used'])
-        rows.push(['Linked Recipe', 'Required Quantity', 'Unit', 'Section'])
+  rows.push([])
+  rows.push(['Linked Recipes'])
+  rows.push(['Section', 'Recipe Name', 'Quantity', 'Unit'])
 
-        recipe.parent_sub_recipes.forEach((link) => {
-          const linkedRecipe = getLinkedRecipe(link)
-          if (!linkedRecipe) return
+  recipe.parent_sub_recipes.forEach((link) => {
+    const linkedRecipe = getLinkedRecipe(link)
+    if (!linkedRecipe) return
 
-          rows.push([
-            linkedRecipe.name,
-            formatNumber(link.quantity * multiplier),
-            link.unit,
-            normalizeSectionName(link.section_name),
-          ])
-        })
-      }
+    rows.push([
+      normalizeSectionName(link.section_name),
+      linkedRecipe.name,
+      formatNumber(link.quantity * multiplier),
+      link.unit,
+    ])
+  })
+}
 
       rows.push([])
       rows.push(['Steps'])
