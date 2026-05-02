@@ -743,7 +743,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
       rows.push([])
       rows.push(['Ingredients'])
-      rows.push(['Section', 'Name', 'Quantity', 'Unit'])
+      rows.push(['Section', 'Name', 'Base Qty', 'Base Unit', 'Scaled Qty', 'Scaled Unit'])
 
       Object.entries(groupedIngredientsForExcel).forEach(([section, items]) => {
         items.forEach((ing) => {
