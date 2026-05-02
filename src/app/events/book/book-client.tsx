@@ -766,6 +766,8 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           rows.push([
             section,
             linkedRecipe.name,
+            formatNumber(link.quantity),
+            link.unit,
             formatNumber(link.quantity * multiplier),
             link.unit,
           ])
@@ -839,7 +841,7 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
       rows.push([])
       rows.push(['Ingredients'])
-      rows.push(['Section', 'Name', 'Quantity', 'Unit'])
+      rows.push(['Section', 'Name', 'Base Qty', 'Base Unit', 'Scaled Qty', 'Scaled Unit'])
 
       const groupedIngredients = page.linkedRecipe.recipe_ingredients.reduce(
         (acc: Record<string, RecipeIngredient[]>, ing) => {
@@ -858,9 +860,11 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
           rows.push([
             section,
             ingredient?.name || '',
+            formatNumber(ing.quantity),
+            ing.unit,
             formatNumber(ing.quantity * page.multiplier),
             ing.unit,
-          ])
+            ])
         })
       })
 
