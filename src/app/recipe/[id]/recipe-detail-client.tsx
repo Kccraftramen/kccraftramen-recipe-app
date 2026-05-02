@@ -118,6 +118,10 @@ function actionLabel(entityType: string, actionType: string) {
   return `${entity} ${action}`
 }
 
+function getIngredientFromRow(row: IngredientRow) {
+  return Array.isArray(row.ingredients) ? row.ingredients[0] : row.ingredients
+}
+
 export default function RecipeDetailClient({
   recipe,
   ingredientRows,
@@ -126,11 +130,17 @@ export default function RecipeDetailClient({
 }: Props) {
   const router = useRouter()
 
+  const [localIngredientRows, setLocalIngredientRows] =
+    useState<IngredientRow[]>(ingredientRows)
+
   const [targetServings, setTargetServings] = useState(
     String(recipe.base_servings)
   )
   const [copyEventName, setCopyEventName] = useState(recipe.event_name || '')
   const [isCopying, setIsCopying] = useState(false)
+  const [deletingIngredientId, setDeletingIngredientId] = useState<string | null>(
+    null
+  )
 
   const multiplier = useMemo(() => {
     const target = Number(targetServings)
@@ -146,7 +156,7 @@ export default function RecipeDetailClient({
   const groupedIngredients = useMemo(() => {
     const groups = new Map<string, IngredientRow[]>()
 
-    ingredientRows.forEach((row) => {
+    localIngredientRows.forEach((row) => {
       const section = normalizeSectionName(row.section_name)
       const existing = groups.get(section) || []
       existing.push(row)
@@ -156,7 +166,7 @@ export default function RecipeDetailClient({
     return Array.from(groups.entries()).sort((a, b) =>
       a[0].localeCompare(b[0])
     )
-  }, [ingredientRows])
+  }, [localIngredientRows])
 
   const groupedSteps = useMemo(() => {
     const groups = new Map<string, StepRow[]>()
@@ -194,6 +204,48 @@ export default function RecipeDetailClient({
         return a.section.localeCompare(b.section)
       })
   }, [stepRows])
+
+  const handleDeleteIngredient = async (row: IngredientRow) => {
+    if (deletingIngredientId) return
+
+    const ingredient = getIngredientFromRow(row)
+
+    const confirmed = window.confirm(
+      `Delete ingredient "${ingredient?.name || 'this ingredient'}"?`
+    )
+
+    if (!confirmed) return
+
+    setDeletingIngredientId(row.id)
+
+    try {
+      const { error } = await supabase
+        .from('recipe_ingredients')
+        .delete()
+        .eq('id', row.id)
+
+      if (error) throw error
+
+      await supabase.from('recipe_change_logs').insert({
+        recipe_id: recipe.id,
+        entity_type: 'ingredient',
+        action_type: 'delete',
+        item_name: ingredient?.name || null,
+        section_name: row.section_name,
+        before_value: `${formatNumber(row.quantity)} ${row.unit}`,
+        after_value: null,
+      })
+
+      setLocalIngredientRows((prev) => prev.filter((item) => item.id !== row.id))
+      router.refresh()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown error occurred.'
+      alert(`Failed to delete ingredient: ${message}`)
+    } finally {
+      setDeletingIngredientId(null)
+    }
+  }
 
   const handleCopyRecipe = async () => {
     if (isCopying) return
@@ -233,12 +285,10 @@ export default function RecipeDetailClient({
 
       const newRecipeId = newRecipe.id
 
-      if (ingredientRows.length > 0) {
-        const ingredientInserts = ingredientRows
+      if (localIngredientRows.length > 0) {
+        const ingredientInserts = localIngredientRows
           .map((row) => {
-            const ingredient = Array.isArray(row.ingredients)
-              ? row.ingredients[0]
-              : row.ingredients
+            const ingredient = getIngredientFromRow(row)
 
             if (!ingredient?.id) return null
 
@@ -380,14 +430,28 @@ export default function RecipeDetailClient({
 
                     <div className="space-y-3">
                       {rows.map((row) => (
-                        <IngredientEditRow
-                          key={row.id}
-                          row={row}
-                          multiplier={multiplier}
-                          formatNumber={formatNumber}
-                          convertUnit={convertUnit}
-                          getUSUnit={getUSUnit}
-                        />
+                        <div key={row.id} className="rounded-2xl border border-gray-200 bg-white p-3">
+                          <IngredientEditRow
+                            row={row}
+                            multiplier={multiplier}
+                            formatNumber={formatNumber}
+                            convertUnit={convertUnit}
+                            getUSUnit={getUSUnit}
+                          />
+
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteIngredient(row)}
+                              disabled={deletingIngredientId === row.id}
+                              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingIngredientId === row.id
+                                ? 'Deleting...'
+                                : 'Delete Ingredient'}
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
