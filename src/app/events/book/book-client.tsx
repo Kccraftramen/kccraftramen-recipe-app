@@ -753,7 +753,9 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
             section,
             ingredient?.name || '',
             formatNumber(ing.quantity * multiplier),
-          ing.unit,
+            ing.unit,
+            formatNumber(ing.quantity * multiplier),
+            ing.unit,
           ])
         })
       })
@@ -1342,7 +1344,10 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
                         return (
                           <div key={ing.id} className="text-sm">
-                            {ingredient?.name} — {formatNumber(qty)} {ing.unit}
+                            {ingredient?.name} — {formatNumber(qty)} {ing.unit}{' '}
+                            <span className="text-gray-500">
+                            (Base: {formatNumber(ing.quantity)} {ing.unit})
+                            </span>
                           </div>
                         )
                       })}
@@ -1366,8 +1371,10 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
             return (
               <div key={link.id} className="text-sm">
-                {linkedRecipe.name} — {formatNumber(link.quantity * multiplier)}{' '}
-                {link.unit}
+                {linkedRecipe.name} — {formatNumber(link.quantity * multiplier)} {link.unit}{' '}
+                <span className="text-gray-500">
+                (Base: {formatNumber(link.quantity)} {link.unit})
+                </span>
               </div>
             )
           })}
@@ -1484,7 +1491,10 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
 
                         return (
                           <div key={ing.id} className="text-sm">
-                            {ingredient?.name} — {formatNumber(qty)} {ing.unit}
+                            {ingredient?.name} — {formatNumber(qty)} {ing.unit}{' '}
+                            <span className="text-gray-500">
+                            (Base: {formatNumber(ing.quantity)} {ing.unit})
+                            </span>
                           </div>
                         )
                       })}
@@ -1503,7 +1513,10 @@ export default function BookClient({ recipes }: { recipes: Recipe[] }) {
                   <div className="space-y-1">
                     {links.map((link, index) => (
                       <div key={`${link.name}-${index}`} className="text-sm">
-                        {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}
+                        {link.name} — {formatNumber(link.requiredQuantity)} {link.unit}{' '}
+                        <span className="text-gray-500">
+                        (Base: {formatNumber(link.requiredQuantity / page.multiplier)} {link.unit})
+                        </span>
                       </div>
                     ))}
                  </div>
